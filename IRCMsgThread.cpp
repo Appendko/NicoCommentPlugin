@@ -1,4 +1,22 @@
-﻿#include <iostream>
+﻿/********************************************************************************
+ Copyright (C) 2014 Append Huang <Append@gmail.com>
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+********************************************************************************/
+
+#include <iostream>
 #include <cwchar>
 #include "constants.h"
 #include "Log.h"
@@ -34,7 +52,8 @@ std::wstring IRCMsgThread::getUsername(std::wstring sender){
 
 void IRCMsgThread::onChatMsg(std::wstring channel, std::wstring nickname, bool isOp, std::wstring message){
     onIRCMsg(L"[CHAT] %ls: %ls\n", nickname.c_str(), message.c_str());
-	IRCMsgQueue.push(message);
+	if(nickname.compare(L"nightbot")!=0&&nickname.compare(L"moobot")!=0&&nickname.compare(L"jtv")!=0)
+		IRCMsgQueue.push(message);
 }
 
 void IRCMsgThread::onChatAction(std::wstring channel, std::wstring nickname, std::wstring action){
@@ -85,7 +104,7 @@ void IRCMsgThread::parseMessage(std::wstring message){
     }else if(!firstParse[1].compare(L"JOIN")){
         std::vector<std::wstring> parse = split(message,L' ',3);
         if(!(getUsername(parse[0].substr(1)).compare(ToLowerString(ircbotPtr->lastIRCNickname)))){ //user succesffully joins a channel
-      /*      onIRCMsg(L"Joined %ls\n",parse[2].c_str());*/
+            onSysMsg(L"Joined %ls\n",parse[2].c_str());
         }
 	/*	else { //other users join the channel
 			onIRCMsg(L"%ls Joined %ls\n",getUsername(parse[0].substr(1)).c_str(),parse[2].c_str());

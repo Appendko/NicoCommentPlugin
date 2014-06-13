@@ -170,9 +170,9 @@
     <ClInclude Include="wstringfunc.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\IRCtest\Log.cpp" />
     <ClCompile Include="IRCBot.cpp" />
     <ClCompile Include="IRCMsgThread.cpp" />
+    <ClCompile Include="Log.cpp" />
     <ClCompile Include="NicoCommentPlugin.cpp" />
     <ClCompile Include="SendReceiveThread.cpp" />
     <ClCompile Include="SimpleSocket.cpp" />

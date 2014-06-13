@@ -1,4 +1,22 @@
-﻿#include <iostream>
+﻿/********************************************************************************
+ Copyright (C) 2014 Append Huang <Append@gmail.com>
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+********************************************************************************/
+
+#include <iostream>
 #include <cwchar>
 #include <string>
 #include "constants.h"
@@ -66,11 +84,11 @@ void IRCBot::IRC_join(std::wstring channel) { sendThread->sendRaw(L"JOIN "+chann
 void IRCBot::IRC_chat(std::wstring channel, std::wstring message) { sendThread->sendRaw(L"PRIVMSG " + channel + L" :" + message); } 
 
 IRCBot::IRCBot(){
-	FILE* fp;
+/*	FILE* fp;
 	_wfopen_s(&fp,LogFileName,L"w, ccs=UTF-8");   fwprintf(fp, L"IRCBot Log File Begin\n");   fclose(fp);
 	_wfopen_s(&fp,SysFileName,L"w, ccs=UTF-8");   fwprintf(fp, L"IRCBot Sys File Begin\n");   fclose(fp);
 	_wfopen_s(&fp,DebugFileName,L"w, ccs=UTF-8"); fwprintf(fp, L"IRCBot Debug File Begin\n"); fclose(fp);
-	_wfopen_s(&fp,IRCFileName,L"w, ccs=UTF-8"); fwprintf(fp, L"IRCBot IRC File Begin\n"); fclose(fp);
+	_wfopen_s(&fp,IRCFileName,L"w, ccs=UTF-8"); fwprintf(fp, L"IRCBot IRC File Begin\n"); fclose(fp);*/
 
 	threadRunning = false; //not for reconnect Task
 	loginSuccessful = false;
@@ -90,15 +108,15 @@ IRCBot::IRCBot(){
 	//Timer Settings;
 	aliveCheckTask = new SimpleTimer ; 
 	aliveCheckTask->TickFunc=std::bind(&IRCBot::AliveCheckTask,this);
-	aliveCheckTask->SetTickTime(10000);
+	aliveCheckTask->SetTickTime(5000);
 	
 	pingTask = new SimpleTimer ;
 	pingTask->TickFunc=std::bind(&IRCBot::PingTask,this);
-	pingTask->SetTickTime(30000);                
+	pingTask->SetTickTime(5000);                
 
 	loginCheckTask = new SimpleTimer ;
 	loginCheckTask->TickFunc=std::bind(&IRCBot::LoginCheckTask,this);
-	loginCheckTask->SetTickTime(10000); 	
+	loginCheckTask->SetTickTime(5000); 	
 	
 	reconnectTask = new SimpleTimer ;
 	reconnectTask->TickFunc=std::bind(&IRCBot::ReconnectTask,this);

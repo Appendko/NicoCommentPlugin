@@ -36,16 +36,21 @@
 #include "IRCMsgThread.h"
 #include "IRCBot.h"
 
-
+// Message Queued for some time: 
+// The Frequency of UpdateTexture
+#define fMsgBufferTime 1.0f
+#define fMsgSpeed (float)(scrollSpeed*extentWidth) / 50.0f
+#define fRatio 1.01f
+#define iNumChars 1
 
 #define ClampVal(val, minVal, maxVal) \
     if(val < minVal) val = minVal; \
     else if(val > maxVal) val = maxVal;
 
-const wchar_t* LogFileName = L"Log.txt";
+/*const wchar_t* LogFileName = L"Log.txt";
 const wchar_t* SysFileName = L"Sys.txt";
 const wchar_t* DebugFileName = L"Debug.txt";
-const wchar_t* IRCFileName = L"IRC.txt";
+const wchar_t* IRCFileName = L"IRC.txt";*/
 
 inline DWORD GetAlphaVal(UINT opacityLevel)
 {
@@ -78,7 +83,9 @@ class NicoCommentPlugin : public ImageSource
 
 	IRCBot		ircbot;
 	bool        bUpdateTexture;
-    
+	float		scrollValue;
+	float		duration;
+
     Texture     *texture;
     float       showExtentTime;
 
@@ -189,13 +196,13 @@ class NicoCommentPlugin : public ImageSource
 		Gdiplus::Graphics *graphics = new Gdiplus::Graphics(hdc);
 		Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
 		SetStringFormat(format);
-		graphics->SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
+		graphics->SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
 		
 		Gdiplus::Status stat = graphics->MeasureString(msg, -1, &font, origin, &format, &boundingBox);
 		if(stat != Gdiplus::Ok)
 		    AppWarning(TEXT("TextSource::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u"), (int)stat);
-		if(bUseOutline)
-			boundingBox.Offset(outlineSize/2, outlineSize/2); 
+		//if(bUseOutline)
+		//	boundingBox.Offset(outlineSize/2, outlineSize/2); 
 		
 		delete graphics;	
 		DeleteDC(hdc);
@@ -214,6 +221,8 @@ class NicoCommentPlugin : public ImageSource
         Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
         SetStringFormat(format);
 
+		UINT TextureWidth = extentWidth+(UINT)(fMsgBufferTime*fMsgSpeed*fRatio); //extra 0.05 for uncertainty
+
 		//----------------------------------------------------------------------
         // write image
 
@@ -225,12 +234,12 @@ class NicoCommentPlugin : public ImageSource
         BITMAPINFOHEADER &bih = bi.bmiHeader;
         bih.biSize = sizeof(bih);
         bih.biBitCount = 32;
-        bih.biWidth  = extentWidth;
+        bih.biWidth  = TextureWidth; 
         bih.biHeight = extentHeight;
         bih.biPlanes = 1;
 
         HBITMAP hBitmap = CreateDIBSection(hTempDC, &bi, DIB_RGB_COLORS, &lpBits, NULL, 0);
-		Gdiplus::Bitmap  bmp(extentWidth, extentHeight, 4*extentWidth, PixelFormat32bppARGB, (BYTE*)lpBits);
+		Gdiplus::Bitmap  bmp(TextureWidth, extentHeight, 4*TextureWidth, PixelFormat32bppARGB, (BYTE*)lpBits);
         Gdiplus::Graphics *graphics = new Gdiplus::Graphics(&bmp); 
         Gdiplus::SolidBrush  *brush = new Gdiplus::SolidBrush(Gdiplus::Color(GetAlphaVal(opacity)|(color&0x00FFFFFF)));
 
@@ -252,20 +261,24 @@ class NicoCommentPlugin : public ImageSource
 
         if(bUseOutline)
         {
+			Gdiplus::GraphicsPath path;
             Gdiplus::FontFamily fontFamily;
-            Gdiplus::GraphicsPath path;
 			font.GetFamily(&fontFamily);
 			for(unsigned int i=0;i<Vcomment->size();i++) /*{Vcomment->at(i).boundingBox.X-=duration;}*/
-				path.AddString(Vcomment->at(i).comment_str, -1, &fontFamily, font.GetStyle(), font.GetSize(), Vcomment->at(i).boundingBox, &format);
-
-            DrawOutlineText(graphics, font, path, format, brush);
+				if(Vcomment->at(i).boundingBox.GetLeft()<TextureWidth) {
+					path.Reset();
+					path.AddString(Vcomment->at(i).comment_str, -1, &fontFamily, font.GetStyle(), font.GetSize(), Vcomment->at(i).boundingBox, &format);
+					DrawOutlineText(graphics, font, path, format, brush);
+				}
 		}
         else
         	for(unsigned int i=0;i<Vcomment->size();i++) /*{Vcomment->at(i).boundingBox.X-=duration;}*/
 			{
-                stat = graphics->DrawString(Vcomment->at(i).comment_str, -1, &font, Vcomment->at(i).boundingBox, &format, brush);
-                if(stat != Gdiplus::Ok)
-                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
+				if(Vcomment->at(i).boundingBox.GetLeft()<TextureWidth) {
+					stat = graphics->DrawString(Vcomment->at(i).comment_str, -1, &font, Vcomment->at(i).boundingBox, &format, brush);
+					if(stat != Gdiplus::Ok)
+	                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
+				}
             }
         
         delete brush;
@@ -273,28 +286,29 @@ class NicoCommentPlugin : public ImageSource
 
         //----------------------------------------------------------------------
         // upload texture
-		if(textureSize.cx != extentWidth || textureSize.cy != extentHeight){
+		if(textureSize.cx != TextureWidth || textureSize.cy != extentHeight){
             if(texture)
                 {
                     delete texture;
                     texture = NULL;
                 }
-			texture = CreateTexture(extentWidth, extentHeight, GS_BGRA, lpBits, FALSE, FALSE);
-			textureSize.cx=extentWidth;
+			texture = CreateTexture(TextureWidth, extentHeight, GS_BGRA, lpBits, FALSE, FALSE);
+			textureSize.cx=TextureWidth;
 			textureSize.cy=extentHeight;
 		}
 
         else if(texture)
-            texture->SetImage(lpBits, GS_IMAGEFORMAT_BGRA, 4*extentWidth);
+            texture->SetImage(lpBits, GS_IMAGEFORMAT_BGRA, 4*TextureWidth);
 		
         if(!texture)
         {
             AppWarning(TEXT("TextSource::UpdateTexture: could not create texture"));
             DeleteObject(hFont);
         }
-
+		
         DeleteDC(hTempDC);
         DeleteObject(hBitmap);
+		scrollValue=0.0f;
     }
 
 public:
@@ -311,9 +325,10 @@ public:
         si.filter = GS_FILTER_LINEAR;
         ss = CreateSamplerState(si);
         globalOpacity = 100;
-		last_row1=0;
-		last_row2=20;
-		Vcomment= new std::vector<Comment>;
+		last_row1 = 0;
+		last_row2 = 20;
+		Vcomment = new std::vector<Comment>;
+		duration = 0.0f;
         Log(TEXT("Using text output"));
 
 		login=L"NICO_COMMENT_PLUGIN_ALPHA"; //not used
@@ -328,7 +343,7 @@ public:
             texture = NULL;
         }
         delete ss;
-		if(Vcomment->size()>0) Vcomment->clear();
+		//if(Vcomment->size()>0) Vcomment->clear();
 		delete Vcomment;
     }
 
@@ -343,22 +358,34 @@ public:
 
     void Tick(float fSeconds)
     {
-		if(Vcomment->size() > 0) {
+        if(scrollSpeed != 0 && texture)
+        {
+            scrollValue += fSeconds*fMsgSpeed/((float)(extentWidth)+(fMsgBufferTime*fMsgSpeed*fRatio));
+//            while(scrollValue > 1.0f)
+//                scrollValue -= 1.0f;
+        }
+		
+		if(!Vcomment->empty()) {
 		std::vector<Comment>* V_new= new std::vector<Comment>;
 			for(unsigned int i=0;i<Vcomment->size();i++) {
-				Vcomment->at(i).boundingBox.X-=fSeconds*scrollSpeed*float(extentWidth)/float(size);
+				Vcomment->at(i).boundingBox.X-=fSeconds*fMsgSpeed;
 				if(Vcomment->at(i).boundingBox.GetRight()>0)
 					V_new->push_back(Vcomment->at(i));
 			}
 			Vcomment->clear(); delete Vcomment;
 			Vcomment=V_new;
-			bDoUpdate = true;
+			if( Vcomment->empty() ) bDoUpdate = true; //Empty out everything: need to clear texture.
 		}
+
         if(showExtentTime > 0.0f)
             showExtentTime -= fSeconds;
 
 		std::wstring msg;
 		while(!ircbot.QueueEmpty()){
+			//receive Msg 
+			ircbot.receiveMsg(msg);
+			//if(msg[0]==L'!') break;
+			//random number generator for Height
 			UINT rand_num;
 			while(true){
 				rand_s(&rand_num);
@@ -369,16 +396,44 @@ public:
 					break;
 				}
 			}
-			ircbot.receiveMsg(msg);
-			Comment tmp_comment;
-			tmp_comment.comment_str=String(msg.c_str());
-			tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
-			Gdiplus::PointF origin((float)extentWidth, float(rand_num)/float(NumOfLines)*(float)extentHeight);
-			//MeasureString: calculate the corresponding bounding Box;
-			Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox );
-			Vcomment->push_back(tmp_comment);
-			bDoUpdate = true;
+			//Parse into iNumChars characters....need tuning, maybe 10 or higher
+			int msglen=msg.length();
+			if(msglen>0){
+				std::vector<std::wstring> Qtmp;
+				for(int i=0;i<((msglen-1)/ iNumChars );i++) Qtmp.push_back(msg.substr(i*iNumChars,iNumChars));
+				Qtmp.push_back(msg.substr(((msglen-1)/iNumChars)*iNumChars));
+				//push into Qcomment
+				float fMsgBegin=(float)extentWidth+fMsgBufferTime*fMsgSpeed;
+				float tmpX=fMsgBegin;
+				for(unsigned int i=0;i<Qtmp.size();i++)
+					{
+					Comment tmp_comment;
+					tmp_comment.comment_str=String(Qtmp[i].c_str());
+					tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
+					Gdiplus::PointF origin(tmpX,float(rand_num)/float(NumOfLines)*(float)extentHeight);
+					//MeasureString: calculate the corresponding bounding Box;
+					Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox );
+					tmpX=tmp_comment.boundingBox.GetRight();
+					Vcomment->push_back(tmp_comment);
+					}
+				Qtmp.clear();
+			}
 		}
+		//Update Texture after 2 seconds.
+		if(Vcomment->empty()){
+			duration=0.0f;
+			if(!bDoUpdate) {
+				scrollValue=0.0f; //Empty Queue in, Empty Queue out.
+				return;
+			}
+		}
+
+		duration+=fSeconds;
+		if(duration > (fMsgBufferTime - TINY_EPSILON)) {
+			bDoUpdate = true;
+			duration=0.0f;
+		}
+
         if(bDoUpdate)
         {
             bDoUpdate = false;
@@ -392,7 +447,7 @@ public:
         if(texture)
         {
             Vect2 sizeMultiplier = size/baseSize;
-            Vect2 newSize = Vect2(float(extentWidth), float(extentHeight))*sizeMultiplier;
+            Vect2 newSize = Vect2(float(textureSize.cx), float(textureSize.cy))*sizeMultiplier;
 
             Vect2 extentVal = Vect2(float(extentWidth), float(extentHeight))*sizeMultiplier;
             if(showExtentTime > 0.0f)
@@ -415,8 +470,8 @@ public:
 
             XRect rect = {int(pos.x), int(pos.y), int(extentVal.x), int(extentVal.y)};
             SetScissorRect(&rect);
-
-            if(bUsePointFiltering) {
+			
+			if(bUsePointFiltering) {
                 if (!sampler) {
                     SamplerInfo samplerinfo;
                     samplerinfo.filter = GS_FILTER_POINT;
@@ -430,7 +485,14 @@ public:
             DWORD alpha = DWORD(double(globalOpacity)*2.55);
             DWORD outputColor = (alpha << 24) | 0xFFFFFF;
 
-            DrawSprite(texture, outputColor, pos.x, pos.y, pos.x+newSize.x, pos.y+newSize.y);
+			UVCoord ul(0.0f, 0.0f);
+            UVCoord lr(1.0f, 1.0f);
+			ul.x += scrollValue;
+            lr.x += scrollValue;
+
+			LoadSamplerState(ss);
+            DrawSpriteEx(texture, outputColor, pos.x, pos.y, pos.x+newSize.x, pos.y+newSize.y, ul.x, ul.y, lr.x, lr.y);
+            //DrawSprite(texture, outputColor, pos.x, pos.y, pos.x+newSize.x, pos.y+newSize.y);
 
             if (bUsePointFiltering)
                 LoadSamplerState(NULL, 0);
@@ -555,19 +617,22 @@ public:
 
 	void TryConnect()
 	{
-		if(ircbot.isConnected()) ircbot.close();
+		if(ircbot.isConnected()) {ircbot.close();Sleep(500);}
 		switch(iServer){
 			case 0: 	{server=std::wstring(L"irc.twitch.tv");break;}
-			case 1: 	{server=std::wstring(L"chat.justin.tv");break;}
+			case 1: 	{server=std::wstring(L"irc.justin.tv");break;}
 			default: 	{server=std::wstring(L"");break;}
 		}
 
-		switch(iPort){			
-			case 0: 	{port=std::wstring(L"443");break;}
-			case 1: 	{port=std::wstring(L"6667");break;}
-			case 2: 	{port=std::wstring(L"80");break;}
-			default: 	{port=std::wstring(L"");break;}
+		if(iServer==0) {
+			switch(iPort){			
+				case 0: 	{port=std::wstring(L"443");break;}
+				case 1: 	{port=std::wstring(L"6667");break;}
+				case 2: 	{port=std::wstring(L"80");break;}
+				default: 	{port=std::wstring(L"");break;}
+			}
 		}
+		if(iServer==1) port=std::wstring(L"6667");
 
 		if(!Nickname.IsEmpty()) nickname=std::wstring(Nickname.Array());
 		else nickname=std::wstring(L"");
@@ -576,6 +641,7 @@ public:
 		else password=std::wstring(L"");
 
 		if(!Channel.IsEmpty()) 	{
+			Channel=Channel.MakeLower();
 			if(Channel.Array()[0]!=L'#') channel=std::wstring(L"#")+std::wstring(Channel.Array());
 			else channel=std::wstring(Channel.Array());
 		}

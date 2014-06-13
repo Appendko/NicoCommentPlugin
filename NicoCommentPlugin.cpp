@@ -139,8 +139,8 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 SendMessage(GetDlgItem(hwnd, IDC_TEXTOPACITY), UDM_SETPOS32, 0, data->GetInt(TEXT("textOpacity"), 100));
 
                 //SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETRANGE32, -4095, 4095);
-				SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETRANGE32, 5, 4095); //only positive
-                SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETPOS32, 0, data->GetInt(TEXT("scrollSpeed"), 20));
+				SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETRANGE32, 5, 100); //only positive
+                SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETPOS32, 0, data->GetInt(TEXT("scrollSpeed"), 10));
 
                 SendMessage(GetDlgItem(hwnd, IDC_BOLD), BM_SETCHECK, data->GetInt(TEXT("bold"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
                 SendMessage(GetDlgItem(hwnd, IDC_ITALIC), BM_SETCHECK, data->GetInt(TEXT("italic"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -191,7 +191,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 				//-----------------------------------------
                 HWND hwndIRCServer = GetDlgItem(hwnd, IDC_IRCSERVER);
                 SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Twitch (irc.twitch.tv)");
-                SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Justin.tv (chat.justin.tv)");
+                SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Justin.tv (irc.justin.tv)");
                 int iServer = data->GetInt(TEXT("iServer"), 0);
                 ClampVal(iServer, 0, 1);
                 SendMessage(hwndIRCServer, CB_SETCURSEL, iServer, 0);
@@ -337,7 +337,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 
 				case IDC_IRCSERVER:
 				case IDC_PORT:
-                    if(HIWORD(wParam) == CBN_SELCHANGE && bInitializedDialog)
+                    /*if(HIWORD(wParam) == CBN_SELCHANGE && bInitializedDialog)
                     {
                         int val = (int)SendMessage((HWND)lParam, CB_GETCURSEL, 0, 0);
                         if( val == CB_ERR)
@@ -350,16 +350,16 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 						{
 							switch(LOWORD(wParam))
 							{
-								case IDC_IRCSERVER:		source->SetInt(TEXT("iServer"), val);
-								case IDC_PORT:			source->SetInt(TEXT("iPort"), val);
+								//case IDC_IRCSERVER:		source->SetInt(TEXT("iServer"), val);
+								//case IDC_PORT:			source->SetInt(TEXT("iPort"), val);
 							}
 						}
-                    }
+                    }*/
                     break;
                 case IDC_NICKNAME:
                 case IDC_PASSWORD:
                 case IDC_CHANNEL:
-                    if(HIWORD(wParam) == EN_CHANGE && bInitializedDialog)
+                    /*if(HIWORD(wParam) == EN_CHANGE && bInitializedDialog)
                     {
                         String val = GetEditText((HWND)lParam);
 
@@ -370,12 +370,12 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                         {
                             switch(LOWORD(wParam))
                             {
-                                case IDC_NICKNAME: source->SetString(TEXT("Nickname"), val); break;
-                                case IDC_PASSWORD: source->SetString(TEXT("Password"), val); break;
-                                case IDC_CHANNEL: source->SetString(TEXT("Channel"), val); break;
+                                //case IDC_NICKNAME: source->SetString(TEXT("Nickname"), val); break;
+                                //case IDC_PASSWORD: source->SetString(TEXT("Password"), val); break;
+                                //case IDC_CHANNEL: source->SetString(TEXT("Channel"), val); break;
                             }
                         }
-                    }
+                    }*/
                     break;
 
                 case IDOK:
