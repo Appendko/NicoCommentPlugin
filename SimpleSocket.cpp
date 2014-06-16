@@ -21,11 +21,13 @@
 #include "constants.h"
 #pragma comment(lib, "Ws2_32.lib")
 #pragma once
+
 SimpleSocket::SimpleSocket() {
 		TheSocket = INVALID_SOCKET;
 		ptr = NULL;
 		result = NULL;
 		ipv4=L"0.0.0.0";
+		status=CLOSED;
 }
 	
 SimpleSocket::~SimpleSocket(){
@@ -41,8 +43,9 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 	int iResult;
 	iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
 	if (iResult != 0) {
-		onSysMsg(L"WSAStartup failed: %d\n", iResult);
+		onSysMsg(L"WSAStartup failed: %d", iResult);
 		return 1;
+		status=CLOSED;
 	}
 
 	struct addrinfoW hints;
@@ -54,8 +57,9 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 	iResult = GetAddrInfoW(server.c_str(), port.c_str(), &hints, &result);
 
 	if (iResult != 0) {
-		onSysMsg(L"GetAddrInfoW failed: %d\n", iResult);
+		onSysMsg(L"GetAddrInfoW failed: %d", iResult);
 		WSACleanup();
+		status=CLOSED;
 		return 1; 
 	}	
 		
@@ -68,11 +72,15 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 	ptr->ai_protocol);		
 
 	if (TheSocket == INVALID_SOCKET) {
-		onSysMsg(L"Error at socket(): %d\n", WSAGetLastError()); 
+		onSysMsg(L"Error at socket(): %d", WSAGetLastError()); 
 		FreeAddrInfoW(result);
 		WSACleanup();
+		status=CLOSED;
 		return 1; 
 	}
+	DWORD RCVTIMEO=5000;
+	iResult = setsockopt(TheSocket, SOL_SOCKET, SO_RCVTIMEO, (char *) &RCVTIMEO, sizeof(DWORD));
+	status=INITIALIZED;
 	return 0;
 }
 
@@ -94,31 +102,48 @@ bool SimpleSocket::ConnectSocket() { //0 for success, 1 for error
 		if (iResult == SOCKET_ERROR) { //ERROR
 			closesocket(TheSocket);
 			TheSocket = INVALID_SOCKET;
-		} else if (iResult == 0) break;
+			status=CLOSED;
+		} else if (iResult == 0) { //OK
+			break;
+		}
 	} 
 
 	FreeAddrInfoW(result); // after success connection or tried all addrs in result, free "result"
 
 	if (TheSocket == INVALID_SOCKET) {
-		onSysMsg(L"Unable to connect to server!\n");
+		onSysMsg(L"Unable to connect to server!");
 		WSACleanup();
+		status=CLOSED;
 		return 1;
 	}
-	else return 0;
+	else {
+		status=CONNECTED;
+		return 0;
+	}
+
 }
 
 bool SimpleSocket::CloseSocket() {	
 // shutdown the send half of the connection since no more data will be sent
-	int iResult = shutdown(TheSocket, SD_SEND);
-	if (iResult == SOCKET_ERROR) {
-		onSysMsg(L"shutdown failed: %d\n", WSAGetLastError());
-		closesocket(TheSocket);
-		WSACleanup();
-		return 1;
+	if(TheSocket!=INVALID_SOCKET){
+		int iResult = shutdown(TheSocket, SD_SEND);
+		if (iResult == SOCKET_ERROR) {
+			onSysMsg(L"Closing: shutdown failed: %d", WSAGetLastError());
+			closesocket(TheSocket);
+			WSACleanup();
+			status=CLOSED;
+			return 1;
+		}
 	}
+	/*recv to no data ? No need since there's always new data on IRC
+	char buffer[DEFAULT_BUFLEN];
+	unsigned int bufferlen=0;		
+	memset(buffer, 0, DEFAULT_BUFLEN);
+	if(TheSocketPtr->recv_data((char*)buffer, bufferlen)*/
 	// cleanup
 	closesocket(TheSocket);
 	WSACleanup();
+	status=CLOSED;
 	return 0;
 }
 
@@ -127,7 +152,7 @@ bool SimpleSocket::send_data(char* buffer, unsigned int bufferlen) {//Send some 
 	int iResult;
 	iResult = send(TheSocket,buffer,bufferlen,0);
 	if (iResult == SOCKET_ERROR) {
-		onSysMsg(L"send failed: %d\n", WSAGetLastError()); /*NEED CHANGE*/
+		onSysMsg(L"send failed: %d", WSAGetLastError()); /*NEED CHANGE*/
 		closesocket(TheSocket);
 		WSACleanup();
 		return 1;
@@ -148,10 +173,8 @@ bool SimpleSocket::recv_data(char* buffer, unsigned int &bufferlen) {
 	// TCP has an 64kb limit; recv for this size. buffer should be recvbuffer.
 	memset(buffer, 0, DEFAULT_BUFLEN);
 	iResult = recv(TheSocket, buffer, DEFAULT_BUFLEN, 0);
-	//printf("%d\n",iResult);
-	//printf(buffer);
 	if (iResult > 0) bufferlen=iResult;
-	else if (iResult == SOCKET_ERROR) onSysMsg(L"recv failed: %d\n", WSAGetLastError());
+	else if (iResult == SOCKET_ERROR) onSysMsg(L"recv failed: %d", WSAGetLastError());
 	return (iResult == SOCKET_ERROR); //true for Error, false for Normal termination.
 }
 

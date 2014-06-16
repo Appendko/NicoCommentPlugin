@@ -17,27 +17,37 @@
 ********************************************************************************/
 
 #include <string>
+#include <map>
 #include <concurrent_queue.h>
 #pragma once
 
 class IRCMsgThread : public SimpleThread { // Dealing with Received Message
 	friend class IRCBot;
-	ReceiveThread *ReceiveThreadPtr;
 	IRCBot *ircbotPtr;
 	std::wstring recv_msg;
-	Concurrency::concurrent_queue<std::wstring> IRCMsgQueue; 
-	
+	Concurrency::concurrent_queue<TircMsg> IRCMsgQueue; 
+	std::map<std::wstring,unsigned int> UserColorMap;
 	virtual DWORD Run();
 	std::wstring getUsername(std::wstring sender);
 	void onChatMsg(std::wstring channel, std::wstring nickname, bool isOp, std::wstring message);
     void onChatAction(std::wstring channel, std::wstring nickname, std::wstring action);
 	void onPrivateMsg(std::wstring nickname, std::wstring message);
     void parseMessage(std::wstring message);
-	
+	void SetUserColor(std::wstring User,std::wstring Color);	
+	unsigned int GetUserColor(std::wstring User);	
+	//Original ReceiveThread
+	char buffer[DEFAULT_BUFLEN];
+	SimpleSocket* TheSocketPtr;
+
 public:
-	void SetReceiveThread(ReceiveThread* Ptr);
+	void sendRaw(std::wstring message);
+	//bool receiveRaw(std::wstring &message);
+	//bool QueueEmpty();
+	void SetSocket(SimpleSocket* SocketPtr);
+	//void SetReceiveThread(ReceiveThread* Ptr);
 	void SetIRCBot(IRCBot* Ptr);
-	bool receiveMsg(std::wstring &message);
+	bool receiveMsg(TircMsg &ircmsg);
 	bool QueueEmpty();
+
 };
 

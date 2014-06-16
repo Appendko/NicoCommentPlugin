@@ -21,7 +21,8 @@
 
 #include "OBSApi.h"
 #include <memory>
-#include <vector>
+#include <queue>
+#include <list>
 #include <string>
 #include <Unknwn.h>    
 #include <gdiplus.h>
@@ -32,7 +33,6 @@
 #include "SimpleSocket.h"
 #include "SimpleThread.h"
 #include "SimpleTimer.h"
-#include "SendReceiveThread.h"
 #include "IRCMsgThread.h"
 #include "IRCBot.h"
 
@@ -47,10 +47,8 @@
     if(val < minVal) val = minVal; \
     else if(val > maxVal) val = maxVal;
 
-/*const wchar_t* LogFileName = L"Log.txt";
-const wchar_t* SysFileName = L"Sys.txt";
-const wchar_t* DebugFileName = L"Debug.txt";
-const wchar_t* IRCFileName = L"IRC.txt";*/
+extern LocaleStringLookup *pluginLocale;
+#define PluginStr(text) pluginLocale->LookupString(TEXT(text))
 
 inline DWORD GetAlphaVal(UINT opacityLevel)
 {
@@ -59,9 +57,13 @@ inline DWORD GetAlphaVal(UINT opacityLevel)
 
 typedef struct comment {
 	String comment_str;
+	UINT comment_Row;
 	Gdiplus::RectF boundingBox;
+	UINT comment_color;
 } Comment;
-//typedef struct comment {	String comment_str;	Gdiplus::RectF boundingBox;	float last_time;} Comment;
+
+
+bool isFinished(const Comment &obj) { return (obj.boundingBox.GetRight()<0.0f); }
 
 class NicoCommentPlugin : public ImageSource
 {
@@ -71,17 +73,27 @@ class NicoCommentPlugin : public ImageSource
 	std::wstring login;
 	std::wstring password;
 	std::wstring channel;
+	std::wstring last_server;
+	std::wstring last_port;
+	std::wstring last_nickname;
+	std::wstring last_login;
+	std::wstring last_password;
+	std::wstring last_channel;
+	std::wstring justinfan;
 
 	String Nickname;
 	String Password;
 	String Channel;
 	UINT iServer;
 	UINT iPort;
-
-    std::vector<Comment> *Vcomment;
-	UINT		last_row1, last_row2;
-
+	bool		bUseJustinfan;
+	std::list<Comment> *Lcomment;
+	UINT		Row[10];
 	IRCBot		ircbot;
+	bool		bUseNickname;
+	bool		bUseNicknameColor;
+	DWORD		NicknameFallbackColor;
+
 	bool        bUpdateTexture;
 	float		scrollValue;
 	float		duration;
@@ -120,6 +132,41 @@ class NicoCommentPlugin : public ImageSource
 
     XElement    *data;
 
+	UINT Rand_Height_Generator(){
+		//random number generator for Height
+		UINT rand_num;
+		rand_s(&rand_num);
+		//detecting empty row;
+		UINT iAnyZero=0;
+		UINT ZeroRow[10]; 
+		for(UINT i=0;i<NumOfLines;i++){
+			if(Row[i]==0) {
+				ZeroRow[iAnyZero]=i;
+				iAnyZero++;
+			}
+		};
+
+		if(iAnyZero!=0)	rand_num=ZeroRow[rand_num%iAnyZero];//rand only in these rows
+		else { //weighted rand.
+			UINT maxRow=0;
+			UINT TotalWeight=0;
+			UINT RowNextWeight[10];
+			for(UINT i=0;i<NumOfLines;i++) if(Row[i]>maxRow) maxRow=Row[i];
+			for(UINT i=0;i<NumOfLines;i++) {
+				TotalWeight+=(maxRow-Row[i]);
+				RowNextWeight[i]=TotalWeight;
+			}
+			rand_num%=TotalWeight;
+			for(UINT i=0;i<NumOfLines;i++) {
+				if (rand_num<RowNextWeight[i]){
+					rand_num=i;
+					break;
+				}
+			}
+		}
+		return rand_num;
+	}
+
     void DrawOutlineText(Gdiplus::Graphics *graphics,
                          Gdiplus::Font &font,
                          const Gdiplus::GraphicsPath &path,
@@ -131,8 +178,9 @@ class NicoCommentPlugin : public ImageSource
 
         outlinePath = path.Clone();
 
-        // Outline color and size
-        UINT tmpOpacity = (UINT)((((float)opacity * 0.01f) * ((float)outlineOpacity * 0.01f)) * 100.0f);
+        // Outline color and size //Try for independent opacity
+        //UINT tmpOpacity = (UINT)((((float)opacity * 0.01f) * ((float)outlineOpacity * 0.01f)) * 100.0f);
+		UINT tmpOpacity = (UINT)outlineOpacity;
         Gdiplus::Pen pen(Gdiplus::Color(GetAlphaVal(tmpOpacity) | (outlineColor&0xFFFFFF)), outlineSize);
         pen.SetLineJoin(Gdiplus::LineJoinRound);
 
@@ -201,17 +249,44 @@ class NicoCommentPlugin : public ImageSource
 		Gdiplus::Status stat = graphics->MeasureString(msg, -1, &font, origin, &format, &boundingBox);
 		if(stat != Gdiplus::Ok)
 		    AppWarning(TEXT("TextSource::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u"), (int)stat);
-		//if(bUseOutline)
-		//	boundingBox.Offset(outlineSize/2, outlineSize/2); 
-		
+	
 		delete graphics;	
 		DeleteDC(hdc);
 		hdc = NULL;
 		DeleteObject(hFont);		
 	}
 
+	float PushMsgIntoList(std::wstring msg, UINT rand_num, UINT iColor, float tmpX){
+		UINT msglen=(UINT)msg.length();
+		if(msglen>0){
+			//Parse into iNumChars characters....need tuning, maybe 10 or higher
+			std::queue<std::wstring> Qtmp;
+			for(UINT i=0;i<((msglen-1)/ iNumChars );i++) Qtmp.push(msg.substr(i*iNumChars,iNumChars));
+			Qtmp.push(msg.substr(((msglen-1)/iNumChars)*iNumChars));
+			//push into Lcomment
+			while(!Qtmp.empty())
+				{
+				Comment tmp_comment;
+				tmp_comment.comment_str=String(Qtmp.front().c_str());
+				tmp_comment.comment_Row=rand_num;
+				tmp_comment.comment_color=iColor;
+				Row[tmp_comment.comment_Row]++;
+				tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
+				Gdiplus::PointF origin(tmpX,float(rand_num)/float(NumOfLines)*(float)extentHeight);
+				//MeasureString: calculate the corresponding bounding Box;
+				Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox );
+				tmpX=tmp_comment.boundingBox.GetRight();
+				Lcomment->push_back(tmp_comment);
+				Qtmp.pop();
+			}
+		}
+		return tmpX;
+	}
+
+
     void UpdateTexture()
     {
+		//Log(TEXT("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d."),Row[0],Row[1],Row[2],Row[3],Row[4],Row[5],Row[6],Row[7],Row[8],Row[9]);
         HFONT hFont = GetFont(); if(!hFont) return;
         Gdiplus::Status stat;
         Gdiplus::RectF layoutBox;
@@ -264,18 +339,20 @@ class NicoCommentPlugin : public ImageSource
 			Gdiplus::GraphicsPath path;
             Gdiplus::FontFamily fontFamily;
 			font.GetFamily(&fontFamily);
-			for(unsigned int i=0;i<Vcomment->size();i++) /*{Vcomment->at(i).boundingBox.X-=duration;}*/
-				if(Vcomment->at(i).boundingBox.GetLeft()<TextureWidth) {
+			for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
+				 if(it->boundingBox.GetLeft()<TextureWidth) {
+					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
 					path.Reset();
-					path.AddString(Vcomment->at(i).comment_str, -1, &fontFamily, font.GetStyle(), font.GetSize(), Vcomment->at(i).boundingBox, &format);
+					path.AddString(it->comment_str, -1, &fontFamily, font.GetStyle(), font.GetSize(), it->boundingBox, &format);
 					DrawOutlineText(graphics, font, path, format, brush);
 				}
+			}
 		}
         else
-        	for(unsigned int i=0;i<Vcomment->size();i++) /*{Vcomment->at(i).boundingBox.X-=duration;}*/
-			{
-				if(Vcomment->at(i).boundingBox.GetLeft()<TextureWidth) {
-					stat = graphics->DrawString(Vcomment->at(i).comment_str, -1, &font, Vcomment->at(i).boundingBox, &format, brush);
+        	for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) { /*{Vcomment->at(i).boundingBox.X-=duration;}*/
+				if(it->boundingBox.GetLeft()<TextureWidth) {
+					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
+					stat = graphics->DrawString(it->comment_str, -1, &font, it->boundingBox, &format, brush);
 					if(stat != Gdiplus::Ok)
 	                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
 				}
@@ -314,6 +391,13 @@ class NicoCommentPlugin : public ImageSource
 public:
     inline NicoCommentPlugin(XElement *data)
     {
+		last_server=std::wstring(L"");
+		last_port=std::wstring(L"");
+		last_nickname=std::wstring(L"");
+		last_login=std::wstring(L"");
+		last_password=std::wstring(L"");
+		last_channel=std::wstring(L"");
+		justinfan=std::wstring(L"");
         this->data = data;
         UpdateSettings();
 
@@ -325,18 +409,20 @@ public:
         si.filter = GS_FILTER_LINEAR;
         ss = CreateSamplerState(si);
         globalOpacity = 100;
-		last_row1 = 0;
-		last_row2 = 20;
-		Vcomment = new std::vector<Comment>;
+		//last_row1 = 0;
+		//last_row2 = 20;
+		Lcomment = new std::list<Comment>;
 		duration = 0.0f;
-        Log(TEXT("Using text output"));
-
+        Log(TEXT("Using Nico Comment Plugin"));
+		zero(&Row,sizeof(UINT)*10);
 		login=L"NICO_COMMENT_PLUGIN_ALPHA"; //not used
     }
 
     ~NicoCommentPlugin()
     {
-		//ircbot.close();
+		Log(TEXT("Closing NicoComment Plugin"));
+		ircbot.close();
+		Log(TEXT("Closing NicoComment Plugin-IRCBOT CLOSED"));
         if(texture)
         {
             delete texture;
@@ -344,7 +430,7 @@ public:
         }
         delete ss;
 		//if(Vcomment->size()>0) Vcomment->clear();
-		delete Vcomment;
+		delete Lcomment;
     }
 
     void Preprocess()
@@ -359,68 +445,40 @@ public:
     void Tick(float fSeconds)
     {
         if(scrollSpeed != 0 && texture)
-        {
             scrollValue += fSeconds*fMsgSpeed/((float)(extentWidth)+(fMsgBufferTime*fMsgSpeed*fRatio));
-//            while(scrollValue > 1.0f)
-//                scrollValue -= 1.0f;
-        }
 		
-		if(!Vcomment->empty()) {
-		std::vector<Comment>* V_new= new std::vector<Comment>;
-			for(unsigned int i=0;i<Vcomment->size();i++) {
-				Vcomment->at(i).boundingBox.X-=fSeconds*fMsgSpeed;
-				if(Vcomment->at(i).boundingBox.GetRight()>0)
-					V_new->push_back(Vcomment->at(i));
+		if(!Lcomment->empty()) {
+			for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
+				it->	boundingBox.X-=fSeconds*fMsgSpeed; 
+				if(it->comment_Row!=99)if(it->boundingBox.GetRight() < extentWidth){ //99 for removed
+					Row[it->comment_Row]--;
+					it->comment_Row=99;
+				}
 			}
-			Vcomment->clear(); delete Vcomment;
-			Vcomment=V_new;
-			if( Vcomment->empty() ) bDoUpdate = true; //Empty out everything: need to clear texture.
+			Lcomment->remove_if(isFinished);//REMOVE object at the left of the screen
+			if( Lcomment->empty() ) bDoUpdate = true; //Empty out everything: need to clear texture.
 		}
 
-        if(showExtentTime > 0.0f)
-            showExtentTime -= fSeconds;
-
+        //if(showExtentTime > 0.0f) showExtentTime -= fSeconds;
+		//Not used; maybe add back.
+		float fMsgBegin=(float)extentWidth+fMsgBufferTime*fMsgSpeed;
+		float tmpX=fMsgBegin;
+		TircMsg tircmsg;
 		std::wstring msg;
 		while(!ircbot.QueueEmpty()){
 			//receive Msg 
-			ircbot.receiveMsg(msg);
-			//if(msg[0]==L'!') break;
-			//random number generator for Height
-			UINT rand_num;
-			while(true){
-				rand_s(&rand_num);
-				rand_num%=NumOfLines;
-				if ((rand_num!=last_row1) && (rand_num!=last_row2)){
-					last_row2=last_row1;
-					last_row1=rand_num;
-					break;
-				}
+			ircbot.receiveMsg(tircmsg);
+			UINT rand_num=Rand_Height_Generator();
+			if(bUseNickname) {
+				UINT iColor=NicknameFallbackColor;
+				if(bUseNicknameColor) if(tircmsg.usercolor!=0) iColor=tircmsg.usercolor;
+				tmpX=PushMsgIntoList(tircmsg.user+L": ", rand_num, iColor, tmpX);
 			}
-			//Parse into iNumChars characters....need tuning, maybe 10 or higher
-			int msglen=msg.length();
-			if(msglen>0){
-				std::vector<std::wstring> Qtmp;
-				for(int i=0;i<((msglen-1)/ iNumChars );i++) Qtmp.push_back(msg.substr(i*iNumChars,iNumChars));
-				Qtmp.push_back(msg.substr(((msglen-1)/iNumChars)*iNumChars));
-				//push into Qcomment
-				float fMsgBegin=(float)extentWidth+fMsgBufferTime*fMsgSpeed;
-				float tmpX=fMsgBegin;
-				for(unsigned int i=0;i<Qtmp.size();i++)
-					{
-					Comment tmp_comment;
-					tmp_comment.comment_str=String(Qtmp[i].c_str());
-					tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
-					Gdiplus::PointF origin(tmpX,float(rand_num)/float(NumOfLines)*(float)extentHeight);
-					//MeasureString: calculate the corresponding bounding Box;
-					Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox );
-					tmpX=tmp_comment.boundingBox.GetRight();
-					Vcomment->push_back(tmp_comment);
-					}
-				Qtmp.clear();
-			}
+			tmpX=PushMsgIntoList(tircmsg.msg, rand_num, color, tmpX);
 		}
+
 		//Update Texture after 2 seconds.
-		if(Vcomment->empty()){
+		if(Lcomment->empty()){
 			duration=0.0f;
 			if(!bDoUpdate) {
 				scrollValue=0.0f; //Empty Queue in, Empty Queue out.
@@ -492,7 +550,6 @@ public:
 
 			LoadSamplerState(ss);
             DrawSpriteEx(texture, outputColor, pos.x, pos.y, pos.x+newSize.x, pos.y+newSize.y, ul.x, ul.y, lr.x, lr.y);
-            //DrawSprite(texture, outputColor, pos.x, pos.y, pos.x+newSize.x, pos.y+newSize.y);
 
             if (bUsePointFiltering)
                 LoadSamplerState(NULL, 0);
@@ -507,7 +564,7 @@ public:
     }
 
     void UpdateSettings()
-    {//bUseExtents is always true //never vertical //never wrap
+    {
         strFont     = data->GetString(TEXT("font"), TEXT("Arial"));
         color       = data->GetInt(TEXT("color"), 0xFFFFFFFF);
         size        = data->GetInt(TEXT("fontSize"), 48);
@@ -519,7 +576,7 @@ public:
         extentWidth = data->GetInt(TEXT("extentWidth"), 0);
         extentHeight= data->GetInt(TEXT("extentHeight"), 0);
         bUsePointFiltering = data->GetInt(TEXT("pointFiltering"), 0) != 0;
-
+		
         baseSize.x  = data->GetFloat(TEXT("baseSizeCX"), 100);
         baseSize.y  = data->GetFloat(TEXT("baseSizeCY"), 100);
 
@@ -537,7 +594,10 @@ public:
 		Nickname    = data->GetString(TEXT("Nickname"));
         Password    = data->GetString(TEXT("Password"));
 		Channel		= data->GetString(TEXT("Channel"));
-		
+		bUseJustinfan = data->GetInt(TEXT("useJustinfan"),1) != 0;
+		bUseNickname = data->GetInt(TEXT("useNickname"), 0) != 0;
+		bUseNicknameColor = data->GetInt(TEXT("useNicknameColor"), 0) != 0;
+		NicknameFallbackColor = data->GetInt(TEXT("NicknameFallbackColor"), 0) ;
         bUpdateTexture = true;
 		TryConnect();
     }
@@ -603,7 +663,15 @@ public:
 			{iServer = iValue; TryConnect();}
 		else if(scmpi(lpName, TEXT("iPort")) == 0)
 			{iPort = iValue; TryConnect();}
-		
+		else if(scmpi(lpName, TEXT("useJustinfan")) == 0)
+			{bUseJustinfan = iValue != 0; TryConnect();}
+		else if(scmpi(lpName, TEXT("useNickname")) == 0)
+            bUseNickname = iValue != 0;
+		else if(scmpi(lpName, TEXT("useNicknameColor")) == 0)
+            bUseNicknameColor = iValue != 0;
+        else if(scmpi(lpName, TEXT("NicknameFallbackColor")) == 0)
+            NicknameFallbackColor = iValue;
+
         bUpdateTexture = true;
     }
 
@@ -611,34 +679,48 @@ public:
     {
         if(scmpi(lpName, TEXT("outlineSize")) == 0)
             outlineSize = fValue;
+		else if(scmpi(lpName, TEXT("baseSizeCX")) == 0)
+            baseSize.x = fValue;
+		else if(scmpi(lpName, TEXT("baseSizeCY")) == 0)
+            baseSize.y = fValue;
 
         bUpdateTexture = true;
     }
 
 	void TryConnect()
 	{
-		if(ircbot.isConnected()) {ircbot.close();Sleep(500);}
+		login=std::wstring(L"NICO_COMMENT_PLUGIN_ALPHA"); //not used
 		switch(iServer){
 			case 0: 	{server=std::wstring(L"irc.twitch.tv");break;}
 			case 1: 	{server=std::wstring(L"irc.justin.tv");break;}
 			default: 	{server=std::wstring(L"");break;}
 		}
 
-		if(iServer==0) {
-			switch(iPort){			
-				case 0: 	{port=std::wstring(L"443");break;}
-				case 1: 	{port=std::wstring(L"6667");break;}
-				case 2: 	{port=std::wstring(L"80");break;}
-				default: 	{port=std::wstring(L"");break;}
-			}
+		switch(iPort){			
+			case 0: 	{port=std::wstring(L"443");break;}
+			case 1: 	{port=std::wstring(L"6667");break;}
+			case 2: 	{port=std::wstring(L"80");break;}
+			default: 	{port=std::wstring(L"");break;}
 		}
-		if(iServer==1) port=std::wstring(L"6667");
 
-		if(!Nickname.IsEmpty()) nickname=std::wstring(Nickname.Array());
-		else nickname=std::wstring(L"");
-
-		if(!Password.IsEmpty()) password=std::wstring(Password.Array());
-		else password=std::wstring(L"");
+		if(bUseJustinfan){
+			if(justinfan.empty()) { //generate a new justinfan name
+				wchar_t buffer[20];
+				UINT rand_num;
+				rand_s(&rand_num);
+				swprintf_s(buffer,20*sizeof(wchar_t),L"justinfan%06d",rand_num%1000000);
+				justinfan=std::wstring(buffer);
+			}
+			//Apply the nick/pass
+			nickname=justinfan;
+			password=std::wstring(L"blah");
+		}
+		else {
+			if(!Nickname.IsEmpty()) nickname=std::wstring(Nickname.Array());
+			else nickname=std::wstring(L"");
+			if(!Password.IsEmpty()) password=std::wstring(Password.Array());
+			else password=std::wstring(L"");
+		}
 
 		if(!Channel.IsEmpty()) 	{
 			Channel=Channel.MakeLower();
@@ -646,16 +728,29 @@ public:
 			else channel=std::wstring(Channel.Array());
 		}
 		else channel=L"";
-		login=std::wstring(L"NICO_COMMENT_PLUGIN_ALPHA"); //not used
-		//onDebugMsg(L"server %ls,port %ls\nnickname %ls\npassword %ls\nchannel %ls\n",server.c_str(),port.c_str(),nickname.c_str(),password.c_str(),channel.c_str());
 
-		if(server.empty()||port.empty()||nickname.empty()||login.empty()||password.empty()||channel.empty())
-			onDebugMsg(L"Not Enough Login Information. \n");
-		else {
-			ircbot.connect(server,port,nickname,login,password,channel);
-			if(ircbot.isConnected()) onDebugMsg(L"IRCBot Connected. \n");
-			else onDebugMsg(L"IRCBot Cannot Connect. \n");
+		if(ircbot.isConnected()) { //Check if disconnection needed
+			if(	last_server.compare(server)!=0 || last_port.compare(port)!=0 ||	
+				last_nickname.compare(nickname)!=0 || last_password.compare(password)!=0 ||	
+				last_channel.compare(channel)!=0 ) { //any one of them differs: Change of detail, need reconnect
+					ircbot.close();
+					Sleep(500);
+				}
 		}
+
+		if(!ircbot.isConnected()) { //if not connected, connect at first - If enough information
+			if(server.empty()||port.empty()||nickname.empty()||password.empty()||channel.empty())
+				onDebugMsg(L"Not Enough Login Information. ");
+			else{
+				last_server=server;  last_port=port;  last_nickname=nickname;
+				last_password=password;  last_channel=channel;
+				ircbot.connect(last_server,last_port,last_nickname,login,last_password,last_channel);
+				Sleep(500);
+				if(ircbot.isConnected()) onDebugMsg(L"IRCBot Connected.");
+				else onDebugMsg(L"IRCBot Cannot Connect.");
+			}
+		}
+
 	}
 
     inline void ResetExtentRect() {showExtentTime = 0.0f;}

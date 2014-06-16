@@ -163,7 +163,6 @@
     <ClInclude Include="Log.h" />
     <ClInclude Include="NicoCommentPlugin.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="SendReceiveThread.h" />
     <ClInclude Include="SimpleSocket.h" />
     <ClInclude Include="SimpleThread.h" />
     <ClInclude Include="SimpleTimer.h" />
@@ -174,7 +173,6 @@
     <ClCompile Include="IRCMsgThread.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="NicoCommentPlugin.cpp" />
-    <ClCompile Include="SendReceiveThread.cpp" />
     <ClCompile Include="SimpleSocket.cpp" />
     <ClCompile Include="SimpleTimer.cpp" />
     <ClCompile Include="wstringfunc.cpp" />

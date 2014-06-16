@@ -24,13 +24,9 @@ class IRCBot {
     bool threadRunning; //not for reconnect Task
     bool loginSuccessful;
 	
-    SendThread* sendThread; 
-    ReceiveThread* receiveThread; 
     IRCMsgThread* ircmsgThread;
 	
     SimpleTimer* aliveCheckTask;
-    SimpleTimer* pingTask;
-    SimpleTimer* loginCheckTask;
     SimpleTimer* reconnectTask;  
 	
     //latest connect info
@@ -54,7 +50,6 @@ public:
 	void IRC_chat(std::wstring channel, std::wstring message);
     void AliveCheckTask();
     void ReconnectTask();
-    void PingTask();
     void LoginCheckTask();
     bool isConnected();
     void reconnect();
@@ -64,6 +59,6 @@ public:
     void onLoginSuccess();
     void onAccidentDisconnection(); //the connection is closed by accident
     void onConnectSuccess();
-	bool receiveMsg(std::wstring &message);
+	bool receiveMsg(TircMsg &ircmsg);
 	bool QueueEmpty();
 };

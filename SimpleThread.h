@@ -53,19 +53,16 @@ public:
 		if(thread!=0) {
 			bKillThread = true;
 			DWORD retv;
-			MSG msg;
-			HANDLE handles[] = {thread};
-			SetEvent(stopReq);
-			//process messages while waiting for the thread to complete, otherwise the thread will be locked forever
-			while((retv = MsgWaitForMultipleObjects(1, handles, FALSE, INFINITE, QS_ALLINPUT)) != WAIT_FAILED) {
-				if(retv == WAIT_OBJECT_0) break;
-				else if(retv == WAIT_OBJECT_0+1)
-					while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))	{
-						TranslateMessage(&msg);
-						DispatchMessage(&msg);
-					}
+
+			retv=WaitForSingleObject(thread,20000);
+			if(retv!=WAIT_OBJECT_0) {//Failed waiting//Extremely Case
+				onDebugMsg(L"THREAD CLOSING: TIMEOUT, FORCE TERMINATING THE THREAD");
+				onDebugMsg(L"THREAD CLOSING: MIGHT LEAD TO SOME UNSTABLITY");
+				DWORD exitcode;
+				GetExitCodeThread(thread,&exitcode);
+				TerminateThread(thread,exitcode);
 			}
-			ResetEvent(stopReq);
+
 			if(thread!=0) {
 				CloseHandle(thread);
 				thread = 0;

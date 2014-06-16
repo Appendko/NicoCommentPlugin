@@ -33,9 +33,6 @@
     <ClInclude Include="Log.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="SendReceiveThread.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
     <ClInclude Include="SimpleSocket.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
@@ -57,9 +54,6 @@
       <Filter>原始程式檔</Filter>
     </ClCompile>
     <ClCompile Include="IRCMsgThread.cpp">
-      <Filter>原始程式檔</Filter>
-    </ClCompile>
-    <ClCompile Include="SendReceiveThread.cpp">
       <Filter>原始程式檔</Filter>
     </ClCompile>
     <ClCompile Include="SimpleSocket.cpp">

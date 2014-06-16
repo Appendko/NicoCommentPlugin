@@ -26,6 +26,7 @@ extern "C" __declspec(dllexport) CTSTR GetPluginName();
 extern "C" __declspec(dllexport) CTSTR GetPluginDescription();
 extern "C" __declspec(dllexport) void ConfigPlugin(HWND);
 
+LocaleStringLookup *pluginLocale = NULL;
 HINSTANCE hinstMain = NULL;
 
 ImageSource* STDCALL CreateTextSource(XElement *data)
@@ -100,7 +101,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
             {
                 ConfigTextSourceInfo *configInfo = (ConfigTextSourceInfo*)lParam;
                 SetWindowLongPtr(hwnd, DWLP_USER, (LONG_PTR)configInfo);
-                LocalizeWindow(hwnd);
+                LocalizeWindow(hwnd, pluginLocale);
 
                 XElement *data = configInfo->data;
 
@@ -138,11 +139,10 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 SendMessage(GetDlgItem(hwnd, IDC_TEXTOPACITY), UDM_SETRANGE32, 0, 100);
                 SendMessage(GetDlgItem(hwnd, IDC_TEXTOPACITY), UDM_SETPOS32, 0, data->GetInt(TEXT("textOpacity"), 100));
 
-                //SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETRANGE32, -4095, 4095);
 				SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETRANGE32, 5, 100); //only positive
                 SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_SETPOS32, 0, data->GetInt(TEXT("scrollSpeed"), 10));
 
-                SendMessage(GetDlgItem(hwnd, IDC_BOLD), BM_SETCHECK, data->GetInt(TEXT("bold"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
+                SendMessage(GetDlgItem(hwnd, IDC_BOLD), BM_SETCHECK, data->GetInt(TEXT("bold"), 1) ? BST_CHECKED : BST_UNCHECKED, 0);
                 SendMessage(GetDlgItem(hwnd, IDC_ITALIC), BM_SETCHECK, data->GetInt(TEXT("italic"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
                 SendMessage(GetDlgItem(hwnd, IDC_UNDERLINE), BM_SETCHECK, data->GetInt(TEXT("underline"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
 
@@ -168,7 +168,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 EnableWindow(GetDlgItem(hwnd, IDC_OUTLINEOPACITY), bChecked);
 
                 SendMessage(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), UDM_SETRANGE32, 1, 20);
-                SendMessage(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), UDM_SETPOS32, 0, data->GetInt(TEXT("outlineSize"), 2));
+                SendMessage(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), UDM_SETPOS32, 0, data->GetInt(TEXT("outlineSize"), 5));
 
                 CCSetColor(GetDlgItem(hwnd, IDC_OUTLINECOLOR), data->GetInt(TEXT("outlineColor"), 0xFF000000));
 
@@ -204,9 +204,29 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 ClampVal(iServer, 0, 2);
                 SendMessage(hwndIRCPort, CB_SETCURSEL, iPort, 0);
 
+				bool bUseJustinfan = data->GetInt(TEXT("useJustinfan"), 1) != 0;
+                SendMessage(GetDlgItem(hwnd, IDC_USEJUSTINFAN), BM_SETCHECK, bUseJustinfan ? BST_CHECKED : BST_UNCHECKED, 0);
+
 				SetWindowText(GetDlgItem(hwnd, IDC_NICKNAME), data->GetString(TEXT("Nickname")));
 				SetWindowText(GetDlgItem(hwnd, IDC_PASSWORD), data->GetString(TEXT("Password")));
+				EnableWindow(GetDlgItem(hwnd, IDC_NICKNAME), !bUseJustinfan);
+				EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), !bUseJustinfan);
+
 				SetWindowText(GetDlgItem(hwnd, IDC_CHANNEL), data->GetString(TEXT("Channel")));
+
+				/*----------------------------------------------------------------------------*/
+
+				bool bChecked2 = data->GetInt(TEXT("useNickname"), 0) != 0;
+				SendMessage(GetDlgItem(hwnd, IDC_USENICKNAME), BM_SETCHECK, bChecked2 ? BST_CHECKED : BST_UNCHECKED, 0);
+				EnableWindow(GetDlgItem(hwnd, IDC_USENICKNAMECOLOR), bChecked2);
+				EnableWindow(GetDlgItem(hwnd, IDC_NICKNAMEFALLBACKCOLOR), bChecked2);
+
+				SendMessage(GetDlgItem(hwnd, IDC_USENICKNAMECOLOR), BM_SETCHECK, data->GetInt(TEXT("useNicknameColor"), 1) ? BST_CHECKED : BST_UNCHECKED, 0);
+
+                CCSetColor(GetDlgItem(hwnd, IDC_NICKNAMEFALLBACKCOLOR), data->GetInt(TEXT("NicknameFallbackColor"), 0xFFFFFF00));
+
+				/*----------------------------------------------------------------------------*/
+
 
                 bInitializedDialog = true;
 
@@ -248,6 +268,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 case IDC_OUTLINECOLOR:
                 case IDC_BACKGROUNDCOLOR:
                 case IDC_COLOR:
+				case IDC_NICKNAMEFALLBACKCOLOR:
                     if(bInitializedDialog)
                     {
                         DWORD color = CCGetColor((HWND)lParam);
@@ -259,17 +280,16 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                         {
                             switch(LOWORD(wParam))
                             {
-                                case IDC_OUTLINECOLOR:      source->SetInt(TEXT("outlineColor"), color); break;
-                                case IDC_BACKGROUNDCOLOR:   source->SetInt(TEXT("backgroundColor"), color); break;
-                                case IDC_COLOR:             source->SetInt(TEXT("color"), color); break;
+                                case IDC_OUTLINECOLOR:			source->SetInt(TEXT("outlineColor"), color); break;
+                                case IDC_BACKGROUNDCOLOR:		source->SetInt(TEXT("backgroundColor"), color); break;
+                                case IDC_COLOR:					source->SetInt(TEXT("color"), color); break;
+								case IDC_NICKNAMEFALLBACKCOLOR:	source->SetInt(TEXT("NicknameFallbackColor"), color); break;
                             }
                         }
                     }
                     break;
 				//TEXT EDIT
                 case IDC_TEXTSIZE_EDIT:
-//                case IDC_EXTENTWIDTH_EDIT:
-//                case IDC_EXTENTHEIGHT_EDIT:
                 case IDC_BACKGROUNDOPACITY_EDIT:
                 case IDC_TEXTOPACITY_EDIT:
                 case IDC_OUTLINEOPACITY_EDIT:
@@ -289,8 +309,6 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                             switch(LOWORD(wParam))
                             {
                                 case IDC_TEXTSIZE_EDIT:             source->SetInt(TEXT("fontSize"), val); break;
-                                case IDC_EXTENTWIDTH_EDIT:          source->SetInt(TEXT("extentWidth"), val); break;
-                                case IDC_EXTENTHEIGHT_EDIT:         source->SetInt(TEXT("extentHeight"), val); break;
                                 case IDC_TEXTOPACITY_EDIT:          source->SetInt(TEXT("textOpacity"), val); break;
                                 case IDC_OUTLINEOPACITY_EDIT:       source->SetInt(TEXT("outlineOpacity"), val); break;
                                 case IDC_BACKGROUNDOPACITY_EDIT:    source->SetInt(TEXT("backgroundOpacity"), val); break;
@@ -306,6 +324,9 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 case IDC_ITALIC:
                 case IDC_UNDERLINE:
                 case IDC_USEOUTLINE:
+				case IDC_USENICKNAME:
+				case IDC_USENICKNAMECOLOR:
+				case IDC_USEJUSTINFAN:
                     if(HIWORD(wParam) == BN_CLICKED && bInitializedDialog)
                     {
                         BOOL bChecked = SendMessage((HWND)lParam, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -321,10 +342,13 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                                 case IDC_ITALIC:            source->SetInt(TEXT("italic"), bChecked); break;
                                 case IDC_UNDERLINE:         source->SetInt(TEXT("underline"), bChecked); break;
                                 case IDC_USEOUTLINE:        source->SetInt(TEXT("useOutline"), bChecked); break;
+								case IDC_USENICKNAME:		source->SetInt(TEXT("useNickname"), bChecked); break;
+								case IDC_USENICKNAMECOLOR:	source->SetInt(TEXT("useNicknameColor"), bChecked); break;
+								case IDC_USEJUSTINFAN:		/*source->SetInt(TEXT("useJustinfan"), bChecked);*/ break;
                             }
                         }
 
-                        else if(LOWORD(wParam) == IDC_USEOUTLINE)
+                        if(LOWORD(wParam) == IDC_USEOUTLINE)
                         {
                             EnableWindow(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS_EDIT), bChecked);
                             EnableWindow(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), bChecked);
@@ -332,50 +356,26 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                             EnableWindow(GetDlgItem(hwnd, IDC_OUTLINEOPACITY_EDIT), bChecked);
                             EnableWindow(GetDlgItem(hwnd, IDC_OUTLINEOPACITY), bChecked);
                         }
+						XElement *data = configInfo->data;
+						if(LOWORD(wParam) == IDC_USENICKNAME)
+                        {
+                            EnableWindow(GetDlgItem(hwnd, IDC_USENICKNAMECOLOR), bChecked);
+                            EnableWindow(GetDlgItem(hwnd, IDC_NICKNAMEFALLBACKCOLOR), bChecked);
+                        }
+
+						if(LOWORD(wParam) == IDC_USEJUSTINFAN)
+						{
+                            EnableWindow(GetDlgItem(hwnd, IDC_NICKNAME), !bChecked);
+                            EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), !bChecked);
+                        }
                     }
                     break;
 
 				case IDC_IRCSERVER:
 				case IDC_PORT:
-                    /*if(HIWORD(wParam) == CBN_SELCHANGE && bInitializedDialog)
-                    {
-                        int val = (int)SendMessage((HWND)lParam, CB_GETCURSEL, 0, 0);
-                        if( val == CB_ERR)
-                            break;
-
-                        ConfigTextSourceInfo *configInfo = (ConfigTextSourceInfo*)GetWindowLongPtr(hwnd, DWLP_USER);
-                        if(!configInfo) break;
-                        ImageSource *source = API->GetSceneImageSource(configInfo->lpName);
-                        if(source)
-						{
-							switch(LOWORD(wParam))
-							{
-								//case IDC_IRCSERVER:		source->SetInt(TEXT("iServer"), val);
-								//case IDC_PORT:			source->SetInt(TEXT("iPort"), val);
-							}
-						}
-                    }*/
-                    break;
                 case IDC_NICKNAME:
                 case IDC_PASSWORD:
                 case IDC_CHANNEL:
-                    /*if(HIWORD(wParam) == EN_CHANGE && bInitializedDialog)
-                    {
-                        String val = GetEditText((HWND)lParam);
-
-                        ConfigTextSourceInfo *configInfo = (ConfigTextSourceInfo*)GetWindowLongPtr(hwnd, DWLP_USER);
-                        if(!configInfo) break;
-                        ImageSource *source = API->GetSceneImageSource(configInfo->lpName);
-                        if(source)
-                        {
-                            switch(LOWORD(wParam))
-                            {
-                                //case IDC_NICKNAME: source->SetString(TEXT("Nickname"), val); break;
-                                //case IDC_PASSWORD: source->SetString(TEXT("Password"), val); break;
-                                //case IDC_CHANNEL: source->SetString(TEXT("Channel"), val); break;
-                            }
-                        }
-                    }*/
                     break;
 
                 case IDOK:
@@ -386,22 +386,9 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 
                         BOOL bUseOutline = SendMessage(GetDlgItem(hwnd, IDC_USEOUTLINE), BM_GETCHECK, 0, 0) == BST_CHECKED;
                         float outlineSize = (float)SendMessage(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), UDM_GETPOS32, 0, 0);
-
-						String Nickname = GetEditText(GetDlgItem(hwnd, IDC_NICKNAME));
-                        String Password = GetEditText(GetDlgItem(hwnd, IDC_PASSWORD));
-						String Channel = GetEditText(GetDlgItem(hwnd, IDC_CHANNEL));
-
-                        UINT extentWidth  = (UINT)SendMessage(GetDlgItem(hwnd, IDC_EXTENTWIDTH),  UDM_GETPOS32, 0, 0);
-                        UINT extentHeight = (UINT)SendMessage(GetDlgItem(hwnd, IDC_EXTENTHEIGHT), UDM_GETPOS32, 0, 0);
-						UINT NumOfLines = (UINT)SendMessage(GetDlgItem(hwnd, IDC_NUMOFLINES), UDM_GETPOS32, 0, 0);
-
+			
                         String strFont = GetFontFace(configInfo, GetDlgItem(hwnd, IDC_FONT));
                         UINT fontSize = (UINT)SendMessage(GetDlgItem(hwnd, IDC_TEXTSIZE), UDM_GETPOS32, 0, 0);
-
-                        BOOL bBold = SendMessage(GetDlgItem(hwnd, IDC_BOLD), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                        BOOL bItalic = SendMessage(GetDlgItem(hwnd, IDC_ITALIC), BM_GETCHECK, 0, 0) == BST_CHECKED;
-
-                        BOOL pointFiltering = SendMessage(GetDlgItem(hwnd, IDC_POINTFILTERING), BM_GETCHECK, 0, 0) == BST_CHECKED;
 
                         String strFontDisplayName = GetEditText(GetDlgItem(hwnd, IDC_FONT));
                         if(strFont.IsEmpty())
@@ -418,21 +405,25 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                             MessageBox(hwnd, strError, NULL, 0);
                             break;
                         }
-
+						UINT extentWidth=(UINT)SendMessage(GetDlgItem(hwnd, IDC_EXTENTWIDTH),  UDM_GETPOS32, 0, 0);
+						UINT extentHeight=(UINT)SendMessage(GetDlgItem(hwnd, IDC_EXTENTHEIGHT), UDM_GETPOS32, 0, 0);
 						configInfo->cx = float(extentWidth);
 						configInfo->cy = float(extentHeight);
                         data->SetFloat(TEXT("baseSizeCX"), configInfo->cx);
                         data->SetFloat(TEXT("baseSizeCY"), configInfo->cy);
+                        data->SetInt(TEXT("extentWidth"), extentWidth);
+                        data->SetInt(TEXT("extentHeight"), extentHeight);
 
                         data->SetString(TEXT("font"), strFont);
+
                         data->SetInt(TEXT("color"), CCGetColor(GetDlgItem(hwnd, IDC_COLOR)));
                         data->SetInt(TEXT("fontSize"), fontSize);
                         data->SetInt(TEXT("textOpacity"), (UINT)SendMessage(GetDlgItem(hwnd, IDC_TEXTOPACITY), UDM_GETPOS32, 0, 0));
                         data->SetInt(TEXT("scrollSpeed"), (int)SendMessage(GetDlgItem(hwnd, IDC_SCROLLSPEED), UDM_GETPOS32, 0, 0));
-                        data->SetInt(TEXT("bold"), bBold);
-                        data->SetInt(TEXT("italic"), bItalic);
+                        data->SetInt(TEXT("bold"), SendMessage(GetDlgItem(hwnd, IDC_BOLD), BM_GETCHECK, 0, 0) == BST_CHECKED);
+                        data->SetInt(TEXT("italic"), SendMessage(GetDlgItem(hwnd, IDC_ITALIC), BM_GETCHECK, 0, 0) == BST_CHECKED);
                         data->SetInt(TEXT("underline"), SendMessage(GetDlgItem(hwnd, IDC_UNDERLINE), BM_GETCHECK, 0, 0) == BST_CHECKED);
-                        data->SetInt(TEXT("pointFiltering"), pointFiltering);
+                        data->SetInt(TEXT("pointFiltering"), SendMessage(GetDlgItem(hwnd, IDC_POINTFILTERING), BM_GETCHECK, 0, 0) == BST_CHECKED);
 
                         data->SetInt(TEXT("backgroundColor"), CCGetColor(GetDlgItem(hwnd, IDC_BACKGROUNDCOLOR)));
                         data->SetInt(TEXT("backgroundOpacity"), (UINT)SendMessage(GetDlgItem(hwnd, IDC_BACKGROUNDOPACITY), UDM_GETPOS32, 0, 0));
@@ -442,14 +433,17 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                         data->SetFloat(TEXT("outlineSize"), outlineSize);
                         data->SetInt(TEXT("outlineOpacity"), (UINT)SendMessage(GetDlgItem(hwnd, IDC_OUTLINEOPACITY), UDM_GETPOS32, 0, 0));
 
-                        data->SetInt(TEXT("extentWidth"), extentWidth);
-                        data->SetInt(TEXT("extentHeight"), extentHeight);
-						data->SetInt(TEXT("NumOfLines"), NumOfLines);
+						data->SetInt(TEXT("NumOfLines"),(int)SendMessage(GetDlgItem(hwnd, IDC_NUMOFLINES), UDM_GETPOS32, 0, 0));
 						data->SetInt(TEXT("iServer"), (int)SendMessage(GetDlgItem(hwnd, IDC_IRCSERVER), CB_GETCURSEL, 0, 0));
 						data->SetInt(TEXT("iPort"), (int)SendMessage(GetDlgItem(hwnd, IDC_PORT), CB_GETCURSEL, 0, 0));
-						data->SetString(TEXT("Nickname"), Nickname);
-                        data->SetString(TEXT("Password"), Password);
-                        data->SetString(TEXT("Channel"), Channel);
+						data->SetString(TEXT("Nickname"), GetEditText(GetDlgItem(hwnd, IDC_NICKNAME)));
+                        data->SetString(TEXT("Password"), GetEditText(GetDlgItem(hwnd, IDC_PASSWORD)));
+                        data->SetString(TEXT("Channel"), GetEditText(GetDlgItem(hwnd, IDC_CHANNEL)));
+
+						data->SetInt(TEXT("useJustinfan"), SendMessage(GetDlgItem(hwnd, IDC_USEJUSTINFAN), BM_GETCHECK, 0, 0) == BST_CHECKED );
+						data->SetInt(TEXT("useNickname"), SendMessage(GetDlgItem(hwnd, IDC_USENICKNAME), BM_GETCHECK, 0, 0) == BST_CHECKED );
+						data->SetInt(TEXT("useNicknameColor"), SendMessage(GetDlgItem(hwnd, IDC_USENICKNAMECOLOR), BM_GETCHECK, 0, 0) == BST_CHECKED );
+						data->SetInt(TEXT("NicknameFallbackColor"), CCGetColor(GetDlgItem(hwnd, IDC_NICKNAMEFALLBACKCOLOR)));
                     }
 
                 case IDCANCEL:
@@ -497,30 +491,39 @@ bool STDCALL ConfigureTextSource(XElement *element, bool bCreating)
 
 bool LoadPlugin()
 {
+	pluginLocale = new LocaleStringLookup;
+
+    if(!pluginLocale->LoadStringFile(TEXT("plugins/NicoCommentPlugin/locale/en.txt")))
+        AppWarning(TEXT("Could not open locale string file '%s'"), TEXT("plugins/NicoCommentPlugin/locale/en.txt"));
+
+    if(scmpi(API->GetLanguage(), TEXT("en")) != 0)
+    {
+        String pluginStringFile;
+        pluginStringFile << TEXT("plugins/NicoCommentPlugin/locale/") << API->GetLanguage() << TEXT(".txt");
+        if(!pluginLocale->LoadStringFile(pluginStringFile))
+            AppWarning(TEXT("Could not open locale string file '%s'"), pluginStringFile.Array());
+    }
+
+
 	InitColorControl(hinstMain);
-    API->RegisterImageSourceClass(TEXT("NicoCommentPlugin"), TEXT("Nico Comment Plugin"), (OBSCREATEPROC)CreateTextSource, (OBSCONFIGPROC)ConfigureTextSource);
+    API->RegisterImageSourceClass(TEXT("NicoCommentPlugin"), PluginStr("ClassName"), (OBSCREATEPROC)CreateTextSource, (OBSCONFIGPROC)ConfigureTextSource);
 	return true;
 }
 
 void UnloadPlugin()
 {
-	onDebugMsg(L"PLUGIN UNLOAD \n");
+	delete pluginLocale;
 }
 
 CTSTR GetPluginName()
 {
-	return TEXT("OBS NicoComment_Plugin");
+	return PluginStr("Plugin.Name");
 }
 
 CTSTR GetPluginDescription()
 {
-	return TEXT("Nico Comment Plugin (based on original TextOutput Source). Alpha Test Version 0.1");
+    return PluginStr("Plugin.Description");
 }
-
-//void ConfigPlugin(HWND hWnd)
-//{
-//	DialogBoxParam(hinstMain, MAKEINTRESOURCE(IDD_CONFIG), OBSGetMainWindow(), ConfigDialogProc, (LPARAM)hWnd);
-//}
 
 BOOL CALLBACK DllMain(HINSTANCE hInst, DWORD dwReason, LPVOID lpBla)
 {

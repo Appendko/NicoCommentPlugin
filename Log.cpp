@@ -47,7 +47,7 @@ void onSysMsg( const wchar_t * format, ... ){
 		va_start ( args, format );
 		vswprintf_s ( buffer, 512 , format, args );
 		va_end ( args );
-		Log(TEXT("[NICO][SYS]%ls\n"),buffer);
+		Log(TEXT("[NICO][SYS]%ls"),buffer);
 /*		FILE* fp; 
 		errno_t err=_wfopen_s(&fp, SysFileName,L"a, ccs=UTF-8");
 		if(err==0){
@@ -63,7 +63,7 @@ void onDebugMsg( const wchar_t * format, ... ){
 		va_start ( args, format );
 		vswprintf_s ( buffer, 512 , format, args );
 		va_end ( args );
-		Log(TEXT("[NICO][DEBUG]%ls\n"),buffer);
+		Log(TEXT("[NICO][DEBUG]%ls"),buffer);
 /*		FILE* fp; 
 		errno_t err=_wfopen_s(&fp, DebugFileName,L"a, ccs=UTF-8");
 		if(err==0){

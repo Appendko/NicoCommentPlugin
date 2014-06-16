@@ -1,0 +1,45 @@
+Cancel="Cancel"
+ClassName="Nico Comment Plugin"
+OK="OK"
+
+Title.NicoCommentPlugin="Nico Comment Plugin"
+
+Groupbox.Design="Design"
+Groupbox.Message="Message"
+Groupbox.Outline="Outline"
+Groupbox.Connection="Connection"
+
+Design.ExtentSize="Extent Size"
+Design.BackgroundColor="Background Color"
+Design.Rows="#Rows"
+Design.ScrollSpeed="Scroll Speed"
+Design.BackgroundOpacity="Background Opacity"
+Design.PointFiltering="Use Point Filtering"
+
+Message.Font="Font"
+Message.FontSize="Size"
+Message.Bold="Bold"
+Message.Italic="Italic"
+Message.Underline="Underline"
+Message.Color="Color"
+Message.Opacity="Opacity"
+
+Message.UseNickname="Use Nickname"
+Message.DefaultNicknameColor="Default Nickname Color"
+Message.UseNicknameColor="Use Justin/Twitch Nickname Color"
+
+Outline.UseOutline="Use Outline"
+Outline.Color="Color"
+Outline.Thickness="Thickness"
+Outline.Opacity="Opacity"
+
+Connection.Server="Server"
+Connection.Port="Port"
+Connection.Channel="Channel"
+Connection.UseAnonymousLogin="Use Anonymous Login"
+Connection.Username="Account"
+Connection.Password="Password"
+
+Plugin.Description="Nico Comment Plugin for OBS. Display the chat messages in Niconico style."
+Plugin.Name="Nico Comment Plugin"
+

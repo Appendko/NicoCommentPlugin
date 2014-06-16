@@ -23,3 +23,12 @@
 #ifndef UNICODE
 #define UNICODE
 #endif 
+
+#ifndef DEF_IRCMSG
+typedef struct _ircmsg{
+	std::wstring user;
+	std::wstring msg;
+	unsigned int usercolor;
+} TircMsg;
+#define DEF_IRCMSG
+#endif
