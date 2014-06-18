@@ -22,14 +22,13 @@
 #include "constants.h"
 #include "Log.h"
 #include "wstringfunc.h"
-
 #include "SimpleSocket.h"
 #include "SimpleThread.h"
-#include "SimpleTimer.h"
-//#include "SendReceiveThread.h"
 #include "IRCMsgThread.h"
 #include "IRCBot.h"
-        
+
+
+
 /********************
 * BASIC IRC Actions *
 ********************/    
@@ -37,13 +36,13 @@
 bool IRCBot::connectTask(std::wstring server, std::wstring port, std::wstring nickname, std::wstring login, std::wstring password){ //true for connect
     // Procedure for Connecting to the IRC server.
 	// return false for default, true only if successfully connected.
-
+		iStatus=BOT_CONNECTING;
 		//int iResult;
 		if ( TheSocket->InitializeSocket(server,port) ) // Initialize Winsock //0 for success, 1 for error 
-			onDebugMsg(L"Error in socket initialization");
+			onDebugMsg(L"IRCBot.connectTask: Error in socket initialization");
 			
 		if ( TheSocket->ConnectSocket() ) // Connect to server //0 for success, 1 for error
-			onDebugMsg(L"Error in establishing socket connection");
+			onDebugMsg(L"IRCBot.connectTask: Error in establishing socket connection");
 
 		else { //Successfully Connected
 			wchar_t buffer[256]=L"";
@@ -69,8 +68,8 @@ bool IRCBot::connectTask(std::wstring server, std::wstring port, std::wstring ni
             loginSuccessful = false; //Not known yet; Initialize for further checking.
 			
             //setup input and output thread 
-            threadRunning = true; //not for reconnect Task
-            //receiveThread->StartThread();
+            threadRunning = true; 
+			ircmsgThread->iStatus=IRC_CLOSED;
             ircmsgThread->StartThread();
             return true; //True for connect
         }
@@ -81,24 +80,24 @@ void IRCBot::IRC_join(std::wstring channel) { ircmsgThread->sendRaw(L"JOIN "+cha
 void IRCBot::IRC_chat(std::wstring channel, std::wstring message) { ircmsgThread->sendRaw(L"PRIVMSG " + channel + L" :" + message); } 
 
 IRCBot::IRCBot(){
-
+	iStatus=BOT_CLOSED;
 	threadRunning = false; //not for reconnect Task
 	loginSuccessful = false;
-
+	
 	TheSocket = new SimpleSocket;
 	
 	ircmsgThread = new IRCMsgThread;
 	ircmsgThread->SetIRCBot(this);								
 	ircmsgThread->SetSocket(TheSocket);
-		
+	ircmsgThread->iStatus=IRC_CLOSED;
 	//Timer Settings;
-	aliveCheckTask = new SimpleTimer ; 
-	aliveCheckTask->TickFunc=std::bind(&IRCBot::AliveCheckTask,this);
-	aliveCheckTask->SetTickTime(5000);            
+//	aliveCheckTask = new SimpleTimer ; 
+//	aliveCheckTask->TickFunc=std::bind(&IRCBot::AliveCheckTask,this);
+//	aliveCheckTask->SetTickTime(5000);            
 
-	reconnectTask = new SimpleTimer ;
-	reconnectTask->TickFunc=std::bind(&IRCBot::ReconnectTask,this);
-	reconnectTask->SetTickTime(5000); 
+//	reconnectTask = new SimpleTimer ;
+//	reconnectTask->TickFunc=std::bind(&IRCBot::ReconnectTask,this);
+//	reconnectTask->SetTickTime(5000); 
 
 	lastIRCServer = L"";
 	lastIRCPort = L"";
@@ -110,23 +109,25 @@ IRCBot::IRCBot(){
 
 IRCBot::~IRCBot(){
 	close();
-	delete aliveCheckTask; 
-	delete reconnectTask;
 	delete ircmsgThread;
 	delete TheSocket ;
 }
 
-void IRCBot::AliveCheckTask() {
-	if( !( ircmsgThread->isAlive() ) ){ 
-		close();
-		onAccidentDisconnection();
+IRCBotStatus IRCBot::AliveCheckTask() {
+	switch (ircmsgThread->iStatus) { 
+		case IRC_DISCONNECTED: 	//IRCMsgThread: Disconnect Unexpectly
+			onAccidentDisconnection();
+			break;
+		case IRC_WRONGLOGIN:	//IRCMsgThread: Wrong Login Information
+			onLoginFailed();
+			break;
+		case IRC_CLOSED:		//StopThread
+			break;
+		case IRC_NORMAL:		//Still Running
+			ircmsgThread->sendRaw(L"PING");
+			break;
 	} 
-	else ircmsgThread->sendRaw(L"PING");
-}
-
-void IRCBot::ReconnectTask() {
-	onDebugMsg(L"Reconnect Task");
-	reconnect();
+	return iStatus;
 }
 
 void IRCBot::LoginCheckTask() {
@@ -138,21 +139,22 @@ void IRCBot::LoginCheckTask() {
 
 bool IRCBot::isConnected(){
     if(TheSocket->isSocketInvalid()) return false;
-    else if( TheSocket->isConnected() && ircmsgThread->isAlive() ) return true;
+    else if( TheSocket->isConnected() && ircmsgThread->iStatus==IRC_NORMAL ) return true;
     else return false;
 }
 
 void IRCBot::reconnect(){
-	bool bReconnectAlive=reconnectTask->isAlive();
 	bool bConnect=connectTask(lastIRCServer,lastIRCPort,lastIRCNickname,lastIRCLogin,lastIRCServerPass);
     if(bConnect) { //success 
-		if(bReconnectAlive) reconnectTask->StopThread();//Stop reconnectTask			
         onConnectSuccess();
-    } else if(!bReconnectAlive) reconnectTask->StartThread();
+	} else {
+		onSysMsg(L"Reconnect Failed; wait for next Tick");
+		iStatus=BOT_NEEDRECONNECT;
+	}
 }
 
 void IRCBot::connect(std::wstring server, std::wstring port, std::wstring nickname, std::wstring login, std::wstring password, std::wstring channel){
-	close();
+	if(iStatus!=BOT_CLOSED) close();
     lastIRCServer = server;
     lastIRCPort = port;
     lastIRCServerPass = password;
@@ -163,25 +165,25 @@ void IRCBot::connect(std::wstring server, std::wstring port, std::wstring nickna
 }
 
 void IRCBot::close(){
-        if(reconnectTask->isAlive()) {
-			onDebugMsg(TEXT("Closing IRCBot-reconnectTask"));
-			reconnectTask->StopThread();
-		}
+		iStatus=BOT_CLOSING;
         if(threadRunning) {
 				threadRunning = false;
-				onDebugMsg(TEXT("Closing Running Threads of IRCBot"));
-				//cancel alive checking task
-				onDebugMsg(TEXT("Closing IRCBot-aliveCheckTask"));
-				if(aliveCheckTask->isAlive()) aliveCheckTask->StopThread();
 				//close threads
-				onDebugMsg(TEXT("Closing IRCBot-ircmsgThread"));
-				if(ircmsgThread->isAlive())	ircmsgThread->StopThread();
-				onDebugMsg(L"All threads closed, IRCBot Stopped");
+				if(ircmsgThread->iStatus==IRC_NORMAL) {
+					onDebugMsg(TEXT("IRCBot.close: Closing IRCBot-ircmsgThread"));
+					ircmsgThread->sendRaw(L"QUIT :Leaving");
+					ircmsgThread->interruptSignal();
+					Sleep(100);
+					TheSocket->CloseSocket();
+					ircmsgThread->StopThread();
+				}
+				onDebugMsg(L"IRCBot.close: All threads closed, IRCBot Stopped");
 		}
+		iStatus=BOT_CLOSED;
 }		
 
 
-void IRCBot::onLoginFailed(){ //Call from LoginCheckTask or after ReceiveThread dropped connection
+void IRCBot::onLoginFailed(){ //Call from LoginCheckTask
 	onSysMsg(L"Failed to Login");
 	close();
 }
@@ -194,22 +196,26 @@ void IRCBot::onLoginSuccess(){ //Call from IRCMsgThread
   
 void IRCBot::onAccidentDisconnection(){ //the connection is closed by accident
 	onSysMsg(L"Accidentally disconnected from server: Reconnecting...");
-	reconnect();
+	close();
+	iStatus=BOT_NEEDRECONNECT;
 }
 
 void IRCBot::onConnectSuccess(){
 	onSysMsg(L"Connect Tasks Successfully Finished");
 	Sleep(500);
 	//setup disconnection checking timer
-	if(ircmsgThread->isAlive())	 { //ircmsgThread will drop very quickly if login failed
-		aliveCheckTask->StartThread();
-		Sleep(1000); //wait for ircmsgThread parsing message.
-		LoginCheckTask();
+	if(ircmsgThread->iStatus!=IRC_NORMAL)	 { 
+		//ircmsgThread will drop very quickly if login failed
+		//if connection dropped, the bot status should still be CONNECTING.
+		AliveCheckTask(); //Determine the message
 	}
-	else{ //ircmsgThread Dropped-login fail or socket drop.
-		onLoginFailed();
+	else{ //ircmsgThread is running
+	iStatus=BOT_CONNECTED;	
+	Sleep(500); 
+	LoginCheckTask(); //Check for once
 	}
 }
 
 bool IRCBot::receiveMsg(TircMsg &ircmsg) {return ircmsgThread->receiveMsg(ircmsg);}
 bool IRCBot::QueueEmpty() {return ircmsgThread->QueueEmpty();}
+IRCBotStatus IRCBot::CheckIRCBotStatus(){ return iStatus;}

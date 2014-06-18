@@ -20,7 +20,7 @@
 #include <map>
 #include <concurrent_queue.h>
 #pragma once
-
+enum IRCMsgThreadStatus {IRC_NORMAL,IRC_DISCONNECTED,IRC_WRONGLOGIN,IRC_CLOSED};
 class IRCMsgThread : public SimpleThread { // Dealing with Received Message
 	friend class IRCBot;
 	IRCBot *ircbotPtr;
@@ -35,19 +35,16 @@ class IRCMsgThread : public SimpleThread { // Dealing with Received Message
     void parseMessage(std::wstring message);
 	void SetUserColor(std::wstring User,std::wstring Color);	
 	unsigned int GetUserColor(std::wstring User);	
-	//Original ReceiveThread
 	char buffer[DEFAULT_BUFLEN];
 	SimpleSocket* TheSocketPtr;
-
 public:
+	IRCMsgThreadStatus iStatus;
 	void sendRaw(std::wstring message);
-	//bool receiveRaw(std::wstring &message);
-	//bool QueueEmpty();
 	void SetSocket(SimpleSocket* SocketPtr);
-	//void SetReceiveThread(ReceiveThread* Ptr);
 	void SetIRCBot(IRCBot* Ptr);
 	bool receiveMsg(TircMsg &ircmsg);
 	bool QueueEmpty();
+	inline void interruptSignal(){bKillThread=true;}
 
 };
 

@@ -504,7 +504,6 @@ bool LoadPlugin()
             AppWarning(TEXT("Could not open locale string file '%s'"), pluginStringFile.Array());
     }
 
-
 	InitColorControl(hinstMain);
     API->RegisterImageSourceClass(TEXT("NicoCommentPlugin"), PluginStr("ClassName"), (OBSCREATEPROC)CreateTextSource, (OBSCONFIGPROC)ConfigureTextSource);
 	return true;

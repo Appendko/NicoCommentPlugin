@@ -32,7 +32,6 @@
 #include "Log.h"
 #include "SimpleSocket.h"
 #include "SimpleThread.h"
-#include "SimpleTimer.h"
 #include "IRCMsgThread.h"
 #include "IRCBot.h"
 
@@ -97,6 +96,7 @@ class NicoCommentPlugin : public ImageSource
 	bool        bUpdateTexture;
 	float		scrollValue;
 	float		duration;
+	float		ircTimer;
 
     Texture     *texture;
     float       showExtentTime;
@@ -248,7 +248,7 @@ class NicoCommentPlugin : public ImageSource
 		
 		Gdiplus::Status stat = graphics->MeasureString(msg, -1, &font, origin, &format, &boundingBox);
 		if(stat != Gdiplus::Ok)
-		    AppWarning(TEXT("TextSource::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u"), (int)stat);
+			AppWarning(TEXT("NicoCommentPlugin::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u %ls"), (int)stat,msg.Array());
 	
 		delete graphics;	
 		DeleteDC(hdc);
@@ -413,23 +413,23 @@ public:
 		//last_row2 = 20;
 		Lcomment = new std::list<Comment>;
 		duration = 0.0f;
-        Log(TEXT("Using Nico Comment Plugin"));
+		ircTimer = 0.0f;
+        onSysMsg(L"Using Nico Comment Plugin Version %d.%d.%d.%d Alpha",PLUGIN_VERSION);
 		zero(&Row,sizeof(UINT)*10);
 		login=L"NICO_COMMENT_PLUGIN_ALPHA"; //not used
     }
 
     ~NicoCommentPlugin()
     {
-		Log(TEXT("Closing NicoComment Plugin"));
+		onSysMsg(L"Closing NicoComment Plugin-Begin Process");
 		ircbot.close();
-		Log(TEXT("Closing NicoComment Plugin-IRCBOT CLOSED"));
+		onSysMsg(L"Closing NicoComment Plugin-IRCBot Closed");
         if(texture)
         {
             delete texture;
             texture = NULL;
         }
         delete ss;
-		//if(Vcomment->size()>0) Vcomment->clear();
 		delete Lcomment;
     }
 
@@ -444,6 +444,14 @@ public:
 
     void Tick(float fSeconds)
     {
+		ircTimer+=fSeconds;
+		if(ircTimer > 5.0f) {
+			ircTimer=0.0f;
+			IRCBotStatus iStatus=ircbot.CheckIRCBotStatus();
+			if(iStatus==BOT_CONNECTED) iStatus=ircbot.AliveCheckTask();
+			if(iStatus==BOT_NEEDRECONNECT) ircbot.reconnect();
+		}
+
         if(scrollSpeed != 0 && texture)
             scrollValue += fSeconds*fMsgSpeed/((float)(extentWidth)+(fMsgBufferTime*fMsgSpeed*fRatio));
 		
@@ -477,7 +485,7 @@ public:
 			tmpX=PushMsgIntoList(tircmsg.msg, rand_num, color, tmpX);
 		}
 
-		//Update Texture after 2 seconds.
+		//Update Texture after 1 seconds.
 		if(Lcomment->empty()){
 			duration=0.0f;
 			if(!bDoUpdate) {
@@ -734,20 +742,20 @@ public:
 				last_nickname.compare(nickname)!=0 || last_password.compare(password)!=0 ||	
 				last_channel.compare(channel)!=0 ) { //any one of them differs: Change of detail, need reconnect
 					ircbot.close();
-					Sleep(500);
+					//Sleep(500);
 				}
 		}
 
 		if(!ircbot.isConnected()) { //if not connected, connect at first - If enough information
 			if(server.empty()||port.empty()||nickname.empty()||password.empty()||channel.empty())
-				onDebugMsg(L"Not Enough Login Information. ");
+				onSysMsg(L"Not Enough Login Information. ");
 			else{
 				last_server=server;  last_port=port;  last_nickname=nickname;
 				last_password=password;  last_channel=channel;
 				ircbot.connect(last_server,last_port,last_nickname,login,last_password,last_channel);
 				Sleep(500);
-				if(ircbot.isConnected()) onDebugMsg(L"IRCBot Connected.");
-				else onDebugMsg(L"IRCBot Cannot Connect.");
+				if(ircbot.isConnected()) onSysMsg(L"IRCBot Connected.");
+				else onSysMsg(L"IRCBot Cannot Connect.");
 			}
 		}
 

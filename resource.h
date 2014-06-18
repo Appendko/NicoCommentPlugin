@@ -1,3 +1,5 @@
+#define PLUGIN_VERSION 0,1,2,2
+
 #ifndef IDC_STATIC
 #define IDC_STATIC (-1)
 #endif

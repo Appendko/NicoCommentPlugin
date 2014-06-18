@@ -24,7 +24,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 #pragma once
 
-
+enum Socket_Status {SOCKET_CLOSED,SOCKET_INITIALIZED,SOCKET_CONNECTED};
 
 class SimpleSocket
 {
@@ -34,8 +34,7 @@ class SimpleSocket
 	std::wstring ipv4;
 
 public:
-	enum Socket_Status{CLOSED,INITIALIZED,CONNECTED};
-	Socket_Status status;
+	Socket_Status iStatus;
 
 	SimpleSocket();
 	~SimpleSocket();

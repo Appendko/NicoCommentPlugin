@@ -26,28 +26,32 @@
 
 #include "SimpleSocket.h"
 #include "SimpleThread.h"
-#include "SimpleTimer.h"
 #include "IRCMsgThread.h"
 #include "IRCBot.h"
 
 DWORD IRCMsgThread::Run() {
+	onSysMsg(L"IRCMsgThread Start");
+	iStatus=IRC_NORMAL;
 	IRCMsgQueue.clear();
 	unsigned int bufferlen;
 	std::string recvstring,msg,umsg; //TwitchIRC use MultiByte
-
 	while(!bKillThread ) { 	
 		//Receive First
 		bufferlen=0;		
 		memset(buffer, 0, DEFAULT_BUFLEN);
-		if(TheSocketPtr->recv_data((char*)buffer, bufferlen)) break;
+		if(TheSocketPtr->recv_data((char*)buffer, bufferlen)) { //Disconnected
+			iStatus=IRC_DISCONNECTED;
+			break;
+		}
 		recvstring=std::string(buffer,bufferlen);
 		//onDebugMsg(L"%ls",from_utf8(recvstring).c_str());
 		if(recvstring.compare(":tmi.twitch.tv NOTICE * :Login unsuccessful\r\n")==0 || //Twitch
 		   recvstring.compare(":tmi.twitch.tv NOTICE * :Error encountered while attempting login\r\n")==0 ){ //Justin
 			Sleep(100); //Wait for logging
 			onSysMsg(L"Login unsuccessful");
+			iStatus=IRC_WRONGLOGIN;
 			break;
-		}
+		}//else if(recvstring.compare(":append!append@append.tmi.twitch.tv PRIVMSG #append :break\r\n")==0){TheSocketPtr->CloseSocket();}
 		//Basic parsing: make it into a string, check for PING, if not-send for further parsing.
 		std::stringstream recvstr(recvstring);
 		while( recvstr.tellg() < bufferlen ) {
@@ -63,8 +67,15 @@ DWORD IRCMsgThread::Run() {
 		}
 		Sleep(100);
 	}
-
-	onSysMsg(L"IRCMsgThread closed");
+	//Determine the reason to break the loop.
+	if(!bKillThread) {
+		if(iStatus==IRC_DISCONNECTED) onDebugMsg(L"IRCMsgThread: Disconnect Unexpectedly");
+		if(iStatus==IRC_WRONGLOGIN) onDebugMsg(L"IRCMsgThread: Wrong Login Information");
+	}
+	else iStatus=IRC_CLOSED;
+	//onDebugMsg(L"[Last Buffer]%ls",from_utf8(recvstring).c_str());
+	onSysMsg(L"IRCMsgThread Close");
+	thread=0;
 	return 0;
 }
 
@@ -98,16 +109,15 @@ void IRCMsgThread::onPrivateMsg(std::wstring nickname, std::wstring message){
         if(!message.substr(0,10).compare(L"USERCOLOR ")){
             std::vector<std::wstring> parse = split(message,L' ',3);
 			SetUserColor(parse[1],ToLowerString(parse[2]));
-			//onIRCMsg(L"[COLOR] %ls -> %ls\n", parse[1].c_str(), parse[2].c_str());
-            //UserColorMapper.ins().setColor(parse[1], parse[2]); parse[1]=user, parse[2]=color.
+			//onDebugMsg(L"[COLOR] %ls -> %ls\n", parse[1].c_str(), parse[2].c_str());
         }
 		/*else if(!message.substr(0,10).compare(L"CLEARCHAT ")){ //message.matches("^CLEARCHAT .*")
             vector<wstring> parse = split(message,L' ',2);
-            onIRCMsg(L"[BAN OR TIMEOUT] %s has been banned or timeoutted\n",parse[1].c_str());
+            onDebugMsg(L"[BAN OR TIMEOUT] %s has been banned or timeoutted\n",parse[1].c_str());
         }else if(!message.compare(L"CLEARCHAT")){
-            onIRCMsg(L"[CLEARCHAT]\n");
+            onDebugMsg(L"[CLEARCHAT]\n");
         }else if(!message.substr(0,30).compare(L"You are banned from talking in")){
-            onIRCMsg(L"[OOPS] %ls\n", message.c_str());
+            onDebugMsg(L"[OOPS] %ls\n", message.c_str());
         }*/
     }		
 }
@@ -117,6 +127,7 @@ void IRCMsgThread::parseMessage(std::wstring message){
     if(firstParse.size()<2) return; //Do Nothing
     if(!firstParse[1].compare(L"PRIVMSG")){
         std::vector<std::wstring> parse = split(message,L' ',4);
+		if(parse.size() < 4) return; //discard this incomplete message
         /*
          * parse[0].substr(1): sender
          * parse[2]: target channel/user
@@ -136,6 +147,7 @@ void IRCMsgThread::parseMessage(std::wstring message){
         
     }else if(!firstParse[1].compare(L"JOIN")){
         std::vector<std::wstring> parse = split(message,L' ',3);
+		if(parse.size() < 3) return; //discard this incomplete message
         if(!(getUsername(parse[0].substr(1)).compare(ToLowerString(ircbotPtr->lastIRCNickname)))){ //user succesffully joins a channel
             onSysMsg(L"Joined %ls",parse[2].c_str());
         }

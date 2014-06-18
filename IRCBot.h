@@ -16,18 +16,20 @@
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 ********************************************************************************/
 
+enum IRCBotStatus {BOT_CLOSED,BOT_CONNECTING,BOT_CONNECTED,BOT_NEEDRECONNECT,BOT_CLOSING};
 class IRCBot {
 	friend class IRCMsgThread; 
+	IRCBotStatus iStatus;
 
     SimpleSocket* TheSocket;
 	
     bool threadRunning; //not for reconnect Task
     bool loginSuccessful;
-	
+
     IRCMsgThread* ircmsgThread;
 	
-    SimpleTimer* aliveCheckTask;
-    SimpleTimer* reconnectTask;  
+//    SimpleTimer* aliveCheckTask;
+//    SimpleTimer* reconnectTask;  
 	
     //latest connect info
     std::wstring lastIRCServer;
@@ -48,7 +50,7 @@ public:
 	~IRCBot();
 	void IRC_join(std::wstring channel);
 	void IRC_chat(std::wstring channel, std::wstring message);
-    void AliveCheckTask();
+    IRCBotStatus AliveCheckTask();
     void ReconnectTask();
     void LoginCheckTask();
     bool isConnected();
@@ -61,4 +63,5 @@ public:
     void onConnectSuccess();
 	bool receiveMsg(TircMsg &ircmsg);
 	bool QueueEmpty();
+	IRCBotStatus CheckIRCBotStatus();
 };

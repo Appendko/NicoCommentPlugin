@@ -27,7 +27,7 @@ SimpleSocket::SimpleSocket() {
 		ptr = NULL;
 		result = NULL;
 		ipv4=L"0.0.0.0";
-		status=CLOSED;
+		iStatus=SOCKET_CLOSED;
 }
 	
 SimpleSocket::~SimpleSocket(){
@@ -45,7 +45,7 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 	if (iResult != 0) {
 		onSysMsg(L"WSAStartup failed: %d", iResult);
 		return 1;
-		status=CLOSED;
+		iStatus=SOCKET_CLOSED;
 	}
 
 	struct addrinfoW hints;
@@ -59,7 +59,7 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 	if (iResult != 0) {
 		onSysMsg(L"GetAddrInfoW failed: %d", iResult);
 		WSACleanup();
-		status=CLOSED;
+		iStatus=SOCKET_CLOSED;
 		return 1; 
 	}	
 		
@@ -75,12 +75,12 @@ bool SimpleSocket::InitializeSocket(std::wstring server, std::wstring port)	{ //
 		onSysMsg(L"Error at socket(): %d", WSAGetLastError()); 
 		FreeAddrInfoW(result);
 		WSACleanup();
-		status=CLOSED;
+		iStatus=SOCKET_CLOSED;
 		return 1; 
 	}
-	DWORD RCVTIMEO=5000;
+	DWORD RCVTIMEO=15000;
 	iResult = setsockopt(TheSocket, SOL_SOCKET, SO_RCVTIMEO, (char *) &RCVTIMEO, sizeof(DWORD));
-	status=INITIALIZED;
+	iStatus=SOCKET_INITIALIZED;
 	return 0;
 }
 
@@ -102,7 +102,7 @@ bool SimpleSocket::ConnectSocket() { //0 for success, 1 for error
 		if (iResult == SOCKET_ERROR) { //ERROR
 			closesocket(TheSocket);
 			TheSocket = INVALID_SOCKET;
-			status=CLOSED;
+			iStatus=SOCKET_CLOSED;
 		} else if (iResult == 0) { //OK
 			break;
 		}
@@ -113,11 +113,11 @@ bool SimpleSocket::ConnectSocket() { //0 for success, 1 for error
 	if (TheSocket == INVALID_SOCKET) {
 		onSysMsg(L"Unable to connect to server!");
 		WSACleanup();
-		status=CLOSED;
+		iStatus=SOCKET_CLOSED;
 		return 1;
 	}
 	else {
-		status=CONNECTED;
+		iStatus=SOCKET_CONNECTED;
 		return 0;
 	}
 
@@ -126,12 +126,12 @@ bool SimpleSocket::ConnectSocket() { //0 for success, 1 for error
 bool SimpleSocket::CloseSocket() {	
 // shutdown the send half of the connection since no more data will be sent
 	if(TheSocket!=INVALID_SOCKET){
-		int iResult = shutdown(TheSocket, SD_SEND);
+		int iResult = shutdown(TheSocket, SD_BOTH);
 		if (iResult == SOCKET_ERROR) {
 			onSysMsg(L"Closing: shutdown failed: %d", WSAGetLastError());
 			closesocket(TheSocket);
 			WSACleanup();
-			status=CLOSED;
+			iStatus=SOCKET_CLOSED;
 			return 1;
 		}
 	}
@@ -143,7 +143,7 @@ bool SimpleSocket::CloseSocket() {
 	// cleanup
 	closesocket(TheSocket);
 	WSACleanup();
-	status=CLOSED;
+	iStatus=SOCKET_CLOSED;
 	return 0;
 }
 

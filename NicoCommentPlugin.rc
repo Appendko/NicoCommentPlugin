@@ -9,7 +9,6 @@
 
 
 
-
 //
 // Dialog resources
 //
@@ -19,7 +18,7 @@ STYLE DS_CENTER | DS_MODALFRAME | DS_SHELLFONT | WS_CAPTION | WS_POPUP | WS_SYSM
 CAPTION "Title.NicoCommentPlugin"
 FONT 8, "MS Shell Dlg", 400, 0, 1
 {
-    LTEXT           "Nico Comment Plugin, Version 0.1.2 alpha", IDC_STATIC, 10, 290, 125, 8, SS_LEFT, WS_EX_LEFT
+    LTEXT           "Nico Comment Plugin, Alpha Test Version", IDC_STATIC, 10, 290, 125, 8, SS_LEFT, WS_EX_LEFT
     LTEXT           "Created by Append Huang", IDC_STATIC, 10, 302, 81, 8, SS_LEFT, WS_EX_LEFT
     GROUPBOX        "Groupbox.Message", IDC_STATIC, 8, 80, 356, 80, 0, WS_EX_LEFT
     GROUPBOX        "Groupbox.Connection", IDC_STATIC, 8, 220, 356, 60, 0, WS_EX_LEFT
@@ -69,8 +68,8 @@ FONT 8, "MS Shell Dlg", 400, 0, 1
     RTEXT           "Connection.Server", IDC_STATIC, 15, 237, 40, 8, SS_RIGHT, WS_EX_LEFT
     COMBOBOX        IDC_IRCSERVER, 58, 235, 90, 20, WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, WS_EX_LEFT
     RTEXT           "Connection.Port", IDC_STATIC, 155, 237, 25, 8, SS_RIGHT, WS_EX_LEFT
-    COMBOBOX        IDC_PORT, 181, 235, 30, 20, WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, WS_EX_LEFT
-    RTEXT           "Connection.Channel", IDC_STATIC, 207, 237, 50, 8, SS_RIGHT, WS_EX_LEFT
+    COMBOBOX        IDC_PORT, 181, 235, 35, 20, WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, WS_EX_LEFT
+    RTEXT           "Connection.Channel", IDC_STATIC, 217, 237, 40, 8, SS_RIGHT, WS_EX_LEFT
     LTEXT           "#", IDC_STATIC, 261, 237, 8, 8, SS_LEFT, WS_EX_LEFT
     EDITTEXT        IDC_CHANNEL, 266, 235, 90, 14, ES_AUTOHSCROLL, WS_EX_LEFT
     AUTOCHECKBOX    "Connection.UseAnonymousLogin", IDC_USEJUSTINFAN, 20, 256, 70, 10, 0, WS_EX_LEFT
@@ -91,8 +90,8 @@ FONT 8, "MS Shell Dlg", 400, 0, 1
 //
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 1 VERSIONINFO
-    FILEVERSION     0,1,2,0
-    PRODUCTVERSION  0,1,2,0
+    FILEVERSION     PLUGIN_VERSION
+    PRODUCTVERSION  PLUGIN_VERSION
     FILEOS          VOS_UNKNOWN
     FILETYPE        VFT_DLL
     FILESUBTYPE     VFT2_UNKNOWN

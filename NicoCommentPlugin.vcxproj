@@ -128,6 +128,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>D:\OBS-stable\OBSApi\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>OBSApi.lib;gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
     <PostBuildEvent>
       <Command>copy $(OutDir)$(ProjectName).dll D:\Streaming\OBS\Current\32bit\plugins</Command>
@@ -165,7 +166,6 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="SimpleSocket.h" />
     <ClInclude Include="SimpleThread.h" />
-    <ClInclude Include="SimpleTimer.h" />
     <ClInclude Include="wstringfunc.h" />
   </ItemGroup>
   <ItemGroup>
@@ -174,7 +174,6 @@
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="NicoCommentPlugin.cpp" />
     <ClCompile Include="SimpleSocket.cpp" />
-    <ClCompile Include="SimpleTimer.cpp" />
     <ClCompile Include="wstringfunc.cpp" />
   </ItemGroup>
   <ItemGroup>

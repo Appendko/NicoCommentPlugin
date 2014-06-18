@@ -39,9 +39,6 @@
     <ClInclude Include="SimpleThread.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="SimpleTimer.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
     <ClInclude Include="wstringfunc.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
@@ -59,9 +56,6 @@
     <ClCompile Include="SimpleSocket.cpp">
       <Filter>原始程式檔</Filter>
     </ClCompile>
-    <ClCompile Include="SimpleTimer.cpp">
-      <Filter>原始程式檔</Filter>
-    </ClCompile>
     <ClCompile Include="wstringfunc.cpp">
       <Filter>原始程式檔</Filter>
     </ClCompile>
@@ -71,7 +65,7 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="NicoCommentPlugin.rc">
-      <Filter>原始程式檔</Filter>
+      <Filter>資源檔</Filter>
     </ResourceCompile>
   </ItemGroup>
 </Project>
