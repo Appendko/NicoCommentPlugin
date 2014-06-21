@@ -161,7 +161,7 @@ void IRCBot::connect(std::wstring server, std::wstring port, std::wstring nickna
     lastIRCNickname = nickname;
     lastIRCLogin = login;
 	lastIRCChannel = channel;
-    reconnect();
+    iStatus=BOT_NEEDRECONNECT;	//reconnect();
 }
 
 void IRCBot::close(){
@@ -202,18 +202,18 @@ void IRCBot::onAccidentDisconnection(){ //the connection is closed by accident
 
 void IRCBot::onConnectSuccess(){
 	onSysMsg(L"Connect Tasks Successfully Finished");
-	Sleep(500);
+	//Sleep(500);
 	//setup disconnection checking timer
-	if(ircmsgThread->iStatus!=IRC_NORMAL)	 { 
+	//if(ircmsgThread->iStatus!=IRC_NORMAL)	 { 
 		//ircmsgThread will drop very quickly if login failed
 		//if connection dropped, the bot status should still be CONNECTING.
-		AliveCheckTask(); //Determine the message
-	}
-	else{ //ircmsgThread is running
+	//	AliveCheckTask(); //Determine the message
+	//}
+	//else{ //ircmsgThread is running
 	iStatus=BOT_CONNECTED;	
 	Sleep(500); 
 	LoginCheckTask(); //Check for once
-	}
+	//}
 }
 
 bool IRCBot::receiveMsg(TircMsg &ircmsg) {return ircmsgThread->receiveMsg(ircmsg);}

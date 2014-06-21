@@ -18,7 +18,6 @@
 
 #define _CRT_RAND_S
 #include <stdlib.h>
-
 #include "OBSApi.h"
 #include <memory>
 #include <queue>
@@ -53,12 +52,14 @@ inline DWORD GetAlphaVal(UINT opacityLevel)
 {
     return ((opacityLevel*255/100)&0xFF) << 24;
 }
+enum MSGTYPE {MSG_USER, MSG_CHAT};
 
 typedef struct comment {
 	String comment_str;
 	UINT comment_Row;
 	Gdiplus::RectF boundingBox;
 	UINT comment_color;
+	MSGTYPE MsgType;
 } Comment;
 
 
@@ -66,6 +67,51 @@ bool isFinished(const Comment &obj) { return (obj.boundingBox.GetRight()<0.0f); 
 
 class NicoCommentPlugin : public ImageSource
 {
+	//Dialog Input Parameters
+	//Design
+    UINT        extentWidth, extentHeight;
+	UINT		NumOfLines;
+    int         scrollSpeed;
+    DWORD       backgroundColor;
+    UINT        backgroundOpacity;
+    bool        bUsePointFiltering;
+	//Message
+    String      strFont;
+    int         size;
+	DWORD       color;
+    UINT        opacity;
+    bool        bBold, bItalic, bUnderline;
+    bool        bUseOutline;
+    float       outlineSize;
+    DWORD       outlineColor;
+    UINT        outlineOpacity;
+	//Nickname
+	bool		bUseNickname;
+	DWORD		NicknameFallbackColor;
+	bool		bUseNicknameColor;
+
+    String      strNicknameFont;
+    int         nicknameSize;
+	DWORD       nicknameColor;
+    UINT        nicknameOpacity;
+    bool        bNicknameBold, bNicknameItalic, bNicknameUnderline;
+    bool        bNicknameUseOutline;
+    float       nicknameOutlineSize;
+    DWORD       nicknameOutlineColor;
+    UINT        nicknameOutlineOpacity;
+	bool        bNicknameOutlineAutoColor;
+
+	//Connect
+	UINT iServer;
+	UINT iPort;
+	String Nickname;
+	String Password;
+	String Channel;
+	bool		bUseJustinfan;
+
+	//Internal Structure
+	
+
 	std::wstring server;
 	std::wstring port;
 	std::wstring nickname;
@@ -80,55 +126,25 @@ class NicoCommentPlugin : public ImageSource
 	std::wstring last_channel;
 	std::wstring justinfan;
 
-	String Nickname;
-	String Password;
-	String Channel;
-	UINT iServer;
-	UINT iPort;
-	bool		bUseJustinfan;
 	std::list<Comment> *Lcomment;
 	UINT		Row[10];
 	IRCBot		ircbot;
-	bool		bUseNickname;
-	bool		bUseNicknameColor;
-	DWORD		NicknameFallbackColor;
 
+    bool        bDoUpdate;
 	bool        bUpdateTexture;
+
 	float		scrollValue;
 	float		duration;
 	float		ircTimer;
-
-    Texture     *texture;
     float       showExtentTime;
-
-    String      strFont;
-    int         size;
-    DWORD       color;
-    UINT        opacity;
-    UINT        globalOpacity;
-    int         scrollSpeed;
-    bool        bBold, bItalic, bUnderline;
-
-    UINT        backgroundOpacity;
-    DWORD       backgroundColor;
-
-    bool        bUseOutline;
-    float       outlineSize;
-    DWORD       outlineColor;
-    UINT        outlineOpacity;
-
-    UINT        extentWidth, extentHeight;
-	UINT		NumOfLines;
 
     Vect2       baseSize;
     SIZE        textureSize;
-    bool        bUsePointFiltering;
-
-    std::unique_ptr<SamplerState> sampler;
-
-    bool        bDoUpdate;
+	Texture     *texture;
 
     SamplerState *ss;
+    std::unique_ptr<SamplerState> sampler;
+    UINT        globalOpacity;
 
     XElement    *data;
 
@@ -171,7 +187,8 @@ class NicoCommentPlugin : public ImageSource
                          Gdiplus::Font &font,
                          const Gdiplus::GraphicsPath &path,
                          const Gdiplus::StringFormat &format,
-                         const Gdiplus::Brush *brush)
+                         const Gdiplus::Brush *brush,
+						 MSGTYPE MsgType, DWORD SpecifiedOutlineColor)
     {
                 
         Gdiplus::GraphicsPath *outlinePath;
@@ -179,42 +196,60 @@ class NicoCommentPlugin : public ImageSource
         outlinePath = path.Clone();
 
         // Outline color and size //Try for independent opacity
-        //UINT tmpOpacity = (UINT)((((float)opacity * 0.01f) * ((float)outlineOpacity * 0.01f)) * 100.0f);
-		UINT tmpOpacity = (UINT)outlineOpacity;
-        Gdiplus::Pen pen(Gdiplus::Color(GetAlphaVal(tmpOpacity) | (outlineColor&0xFFFFFF)), outlineSize);
-        pen.SetLineJoin(Gdiplus::LineJoinRound);
+		Gdiplus::Pen* pen;
+        switch(MsgType) {
+			case MSG_USER:
+				 pen=new Gdiplus::Pen(Gdiplus::Color(GetAlphaVal((UINT)nicknameOutlineOpacity) | (SpecifiedOutlineColor&0x00FFFFFF)), nicknameOutlineSize);
+				break;
+			case MSG_CHAT:
+				 pen=new Gdiplus::Pen(Gdiplus::Color(GetAlphaVal((UINT)outlineOpacity) | (SpecifiedOutlineColor&0x00FFFFFF)), outlineSize);
+				break;
+		}
 
-        // Widen the outline
-        // It seems that Widen has a huge performance impact on DrawPath call, screw it! We're talking about freaking seconds in some extreme cases...
-        //outlinePath->Widen(&pen);
+        pen->SetLineJoin(Gdiplus::LineJoinRound);
 
         // Draw the outline
-        graphics->DrawPath(&pen, outlinePath);
+        graphics->DrawPath(pen, outlinePath);
 
         // Draw the text        
         graphics->FillPath(brush, &path);
 
+		delete pen;
         delete outlinePath;
     }
 
-    HFONT GetFont()
+    HFONT GetFont(MSGTYPE MsgType)
     {
         HFONT hFont = NULL;
 
         LOGFONT lf;
         zero(&lf, sizeof(lf));
-        lf.lfHeight = size;
-        lf.lfWeight = bBold ? FW_BOLD : FW_DONTCARE;
-        lf.lfItalic = bItalic;
-        lf.lfUnderline = bUnderline;
         lf.lfQuality = ANTIALIASED_QUALITY;
+		String strChooseFont;
 
-        if(strFont.IsValid())
-        {
-            scpy_n(lf.lfFaceName, strFont, 31);
+		switch (MsgType) {
+			case MSG_USER:
+			lf.lfHeight = nicknameSize;
+			lf.lfWeight = bNicknameBold ? FW_BOLD : FW_DONTCARE;
+			lf.lfItalic = bNicknameItalic;
+			lf.lfUnderline = bNicknameUnderline;
+			strChooseFont=strNicknameFont;
+			break;
 
-            hFont = CreateFontIndirect(&lf);
-        }
+			case MSG_CHAT:
+			lf.lfHeight = size;
+			lf.lfWeight = bBold ? FW_BOLD : FW_DONTCARE;
+			lf.lfItalic = bItalic;
+			lf.lfUnderline = bUnderline;
+			strChooseFont=strFont;
+			break;
+		}
+
+		if(strChooseFont.IsValid())
+		{
+	        scpy_n(lf.lfFaceName, strChooseFont, 31);
+			hFont = CreateFontIndirect(&lf);
+		}
 
         if(!hFont)
         {
@@ -224,6 +259,23 @@ class NicoCommentPlugin : public ImageSource
 
         return hFont;
     }
+/*	HFONT GetFallbackFont() //Unicode Fallback Font: Arial Unicode MS from MS OFFICE
+    {
+        HFONT hFont = NULL;
+        LOGFONT lf;
+        zero(&lf, sizeof(lf));
+        lf.lfHeight = size;
+        lf.lfWeight = bBold ? FW_BOLD : FW_DONTCARE;
+        lf.lfItalic = bItalic;
+        lf.lfUnderline = bUnderline;
+        lf.lfQuality = ANTIALIASED_QUALITY;
+		scpy_n(lf.lfFaceName, TEXT("Arial Unicode MS"), 31);
+        hFont = CreateFontIndirect(&lf);
+        if(!hFont) { //if Arial Unicode MS not found
+            hFont = GetFont(); //use USER-Selected Font
+        }
+        return hFont;
+    }*/
 
     void SetStringFormat(Gdiplus::StringFormat &format)
     {
@@ -236,27 +288,49 @@ class NicoCommentPlugin : public ImageSource
         format.SetTrimming(Gdiplus::StringTrimmingWord);
     }
 
-	void Calculate_BoundaryBox(String msg, Gdiplus::PointF origin, Gdiplus::RectF &boundingBox )
+	float Calculate_BoundaryBox(String msg, Gdiplus::PointF origin, Gdiplus::RectF &boundingBox, MSGTYPE MsgType )
 	{
 		HDC hdc = CreateCompatibleDC(NULL);
-		HFONT hFont=GetFont(); if(!hFont) return;
+		HFONT hFont=GetFont(MsgType); if(!hFont) return 0.0f;
 		Gdiplus::Font font(hdc, hFont);
+		//SelectObject(hdc,hFont);
+		//WORD GlyInd='\0';
+		//int iError=GetGlyphIndicesW(hdc, msg.Array(), 1, &GlyInd, GGI_MARK_NONEXISTING_GLYPHS);
+		//if(GlyInd==0xFFFF) {
+		//	onDebugMsg(L"GetGlyphIndicesW: msg=%ls, Glyind=0x%04X, Use Fallback Font instead",msg.Array(),GlyInd);
+		//	hFont=GetFallbackFont();
+		//	SelectObject(hdc,hFont);
+		//	iError=GetGlyphIndicesW(hdc, msg.Array(), 1, &GlyInd, GGI_MARK_NONEXISTING_GLYPHS);
+		//	onDebugMsg(L"Using FallbackFont, : msg=%ls, Glyind=0x%04X", msg.Array(), GlyInd);
+		//}
+		//ABCFLOAT tmpABCFloat;
+		//GetCharABCWidthsFloat(hdc, GlyInd, GlyInd, &tmpABCFloat);
+		//onDebugMsg(L"Font ABC: msg=%ls, A: %f, B:%f, C:%f, A+B+C:%f", msg.Array(), 
+		//	tmpABCFloat.abcfA, tmpABCFloat.abcfB, tmpABCFloat.abcfC, 
+		//	tmpABCFloat.abcfA+tmpABCFloat.abcfB+tmpABCFloat.abcfC );
+
 		Gdiplus::Graphics *graphics = new Gdiplus::Graphics(hdc);
 		Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
 		SetStringFormat(format);
 		graphics->SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
 		
 		Gdiplus::Status stat = graphics->MeasureString(msg, -1, &font, origin, &format, &boundingBox);
+		//onDebugMsg(L"Font Width: msg=%ls, BoxWidth:%f, Diff:%f", msg.Array(), boundingBox.Width,
+		//	boundingBox.Width-(tmpABCFloat.abcfA+tmpABCFloat.abcfB+tmpABCFloat.abcfC) );
 		if(stat != Gdiplus::Ok)
-			AppWarning(TEXT("NicoCommentPlugin::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u %ls"), (int)stat,msg.Array());
-	
+			AppWarning(TEXT("NicoCommentPlugin::UpdateTexture: Gdiplus::Graphics::MeasureString failed: %u %ls"), (int)stat,msg.Array());	
 		delete graphics;	
 		DeleteDC(hdc);
 		hdc = NULL;
 		DeleteObject(hFont);		
+		//TEST
+		//boundingBox.Width=(tmpABCFloat.abcfB);
+		//return (float)(boundingBox.X+tmpABCFloat.abcfA+tmpABCFloat.abcfB+tmpABCFloat.abcfC);
+		return boundingBox.GetRight();
+
 	}
 
-	float PushMsgIntoList(std::wstring msg, UINT rand_num, UINT iColor, float tmpX){
+	float PushMsgIntoList(std::wstring msg, UINT rand_num, UINT iColor, float tmpX, MSGTYPE MsgType ) {
 		UINT msglen=(UINT)msg.length();
 		if(msglen>0){
 			//Parse into iNumChars characters....need tuning, maybe 10 or higher
@@ -270,12 +344,12 @@ class NicoCommentPlugin : public ImageSource
 				tmp_comment.comment_str=String(Qtmp.front().c_str());
 				tmp_comment.comment_Row=rand_num;
 				tmp_comment.comment_color=iColor;
+				tmp_comment.MsgType=MsgType;
 				Row[tmp_comment.comment_Row]++;
 				tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
 				Gdiplus::PointF origin(tmpX,float(rand_num)/float(NumOfLines)*(float)extentHeight);
 				//MeasureString: calculate the corresponding bounding Box;
-				Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox );
-				tmpX=tmp_comment.boundingBox.GetRight();
+				tmpX=Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox, MsgType);
 				Lcomment->push_back(tmp_comment);
 				Qtmp.pop();
 			}
@@ -287,12 +361,18 @@ class NicoCommentPlugin : public ImageSource
     void UpdateTexture()
     {
 		//Log(TEXT("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d."),Row[0],Row[1],Row[2],Row[3],Row[4],Row[5],Row[6],Row[7],Row[8],Row[9]);
-        HFONT hFont = GetFont(); if(!hFont) return;
+        HFONT hChatFont = GetFont(MSG_CHAT); if(!hChatFont) return;
+		HFONT hUserFont = GetFont(MSG_USER); if(!hUserFont) return;
+
+//		HFONT hFallbackFont = GetFallbackFont(); 
         Gdiplus::Status stat;
         Gdiplus::RectF layoutBox;
         
         HDC hTempDC = CreateCompatibleDC(NULL);
-		Gdiplus::Font font(hTempDC, hFont);
+		Gdiplus::Font chatFont(hTempDC, hChatFont);  
+		Gdiplus::Font userFont(hTempDC, hUserFont);  
+/*		Gdiplus::Font fallbackfont(hTempDC, hFallbackFont);*/
+
         Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
         SetStringFormat(format);
 
@@ -334,29 +414,59 @@ class NicoCommentPlugin : public ImageSource
         graphics->SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         
 
-        if(bUseOutline)
-        {
-			Gdiplus::GraphicsPath path;
-            Gdiplus::FontFamily fontFamily;
-			font.GetFamily(&fontFamily);
-			for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
-				 if(it->boundingBox.GetLeft()<TextureWidth) {
+		Gdiplus::GraphicsPath path;
+		Gdiplus::FontFamily fontFamily;
+		Gdiplus::Font* font;
+
+		for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
+			//Check For Fallback;
+/*			SelectObject(hTempDC,hFont);
+			WORD GlyInd='\0';
+			GetGlyphIndicesW(hTempDC,it->comment_str.Array(),1,&GlyInd,GGI_MARK_NONEXISTING_GLYPHS);
+			if(GlyInd==0xFFFF) {
+				font=&fallbackfont;
+				font->GetFamily(&fontFamily);
+			}
+			else {		
+				font=&userFont;
+				font->GetFamily(&fontFamily);
+			}*/
+			bool bCommentUseOutline = false;
+			DWORD tmp_OutlineColor=outlineColor;
+			switch(it->MsgType){
+				case MSG_USER:
+					font=&userFont;
+					font->GetFamily(&fontFamily);
+					bCommentUseOutline=bNicknameUseOutline;
+					if(bNicknameOutlineAutoColor&&bUseNicknameColor){ 
+						UINT brightness=((it->comment_color&0x00FF0000)>>16) + ((it->comment_color&0x0000FF00)>>8) + (it->comment_color&0x000000FF);
+						if( brightness > 3*128 ) tmp_OutlineColor=0xFF000000;//(black line)
+						else tmp_OutlineColor=0xFFFFFFFF;
+					} else tmp_OutlineColor=nicknameOutlineColor;
+
+					break;
+				case MSG_CHAT:
+					font=&chatFont;
+					font->GetFamily(&fontFamily);
+					bCommentUseOutline=bUseOutline;
+					tmp_OutlineColor=outlineColor;
+					break;
+			}
+			//Draw The Character One By One
+			if(it->boundingBox.GetLeft()<TextureWidth) {		
+				if(bCommentUseOutline) {
 					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
 					path.Reset();
-					path.AddString(it->comment_str, -1, &fontFamily, font.GetStyle(), font.GetSize(), it->boundingBox, &format);
-					DrawOutlineText(graphics, font, path, format, brush);
-				}
-			}
-		}
-        else
-        	for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) { /*{Vcomment->at(i).boundingBox.X-=duration;}*/
-				if(it->boundingBox.GetLeft()<TextureWidth) {
+					path.AddString(it->comment_str, -1, &fontFamily, font->GetStyle(), font->GetSize(), it->boundingBox, &format);
+					DrawOutlineText(graphics, *font, path, format, brush, it->MsgType,tmp_OutlineColor);
+				} else {
 					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
-					stat = graphics->DrawString(it->comment_str, -1, &font, it->boundingBox, &format, brush);
+					stat = graphics->DrawString(it->comment_str, -1, font, it->boundingBox, &format, brush);
 					if(stat != Gdiplus::Ok)
 	                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
 				}
-            }
+			}
+		}
         
         delete brush;
         delete graphics;
@@ -379,8 +489,9 @@ class NicoCommentPlugin : public ImageSource
 		
         if(!texture)
         {
-            AppWarning(TEXT("TextSource::UpdateTexture: could not create texture"));
-            DeleteObject(hFont);
+            AppWarning(TEXT("NicoCommentPlugin::UpdateTexture: could not create texture"));
+            DeleteObject(hChatFont);
+			DeleteObject(hUserFont);
         }
 		
         DeleteDC(hTempDC);
@@ -391,6 +502,7 @@ class NicoCommentPlugin : public ImageSource
 public:
     inline NicoCommentPlugin(XElement *data)
     {
+		ircTimer = 4.0f;
 		last_server=std::wstring(L"");
 		last_port=std::wstring(L"");
 		last_nickname=std::wstring(L"");
@@ -413,10 +525,11 @@ public:
 		//last_row2 = 20;
 		Lcomment = new std::list<Comment>;
 		duration = 0.0f;
-		ircTimer = 0.0f;
+
         onSysMsg(L"Using Nico Comment Plugin Version %d.%d.%d.%d Alpha",PLUGIN_VERSION);
 		zero(&Row,sizeof(UINT)*10);
 		login=L"NICO_COMMENT_PLUGIN_ALPHA"; //not used
+
     }
 
     ~NicoCommentPlugin()
@@ -480,9 +593,9 @@ public:
 			if(bUseNickname) {
 				UINT iColor=NicknameFallbackColor;
 				if(bUseNicknameColor) if(tircmsg.usercolor!=0) iColor=tircmsg.usercolor;
-				tmpX=PushMsgIntoList(tircmsg.user+L": ", rand_num, iColor, tmpX);
+				tmpX=PushMsgIntoList(tircmsg.user+L": ", rand_num, iColor, tmpX, MSG_USER);
 			}
-			tmpX=PushMsgIntoList(tircmsg.msg, rand_num, color, tmpX);
+			tmpX=PushMsgIntoList(tircmsg.msg, rand_num, color, tmpX, MSG_CHAT);
 		}
 
 		//Update Texture after 1 seconds.
@@ -573,39 +686,55 @@ public:
 
     void UpdateSettings()
     {
-        strFont     = data->GetString(TEXT("font"), TEXT("Arial"));
-        color       = data->GetInt(TEXT("color"), 0xFFFFFFFF);
-        size        = data->GetInt(TEXT("fontSize"), 48);
-        opacity     = data->GetInt(TEXT("textOpacity"), 100);
+		baseSize.x  = data->GetFloat(TEXT("baseSizeCX"), 100);
+        baseSize.y  = data->GetFloat(TEXT("baseSizeCY"), 100);
+		//Design
+        extentWidth = data->GetInt(TEXT("extentWidth"), 0);
+        extentHeight= data->GetInt(TEXT("extentHeight"), 0);
+		NumOfLines = data->GetInt(TEXT("NumOfLines"), 0);
         scrollSpeed = data->GetInt(TEXT("scrollSpeed"), 0);
+        backgroundColor   = data->GetInt(TEXT("backgroundColor"), 0xFF000000);
+        backgroundOpacity = data->GetInt(TEXT("backgroundOpacity"), 0);
+        bUsePointFiltering = data->GetInt(TEXT("pointFiltering"), 0) != 0;
+
+		//Message
+        strFont     = data->GetString(TEXT("font"), TEXT("Arial"));
+        size        = data->GetInt(TEXT("fontSize"), 48);
+		color       = data->GetInt(TEXT("color"), 0xFFFFFFFF);
+        opacity     = data->GetInt(TEXT("textOpacity"), 100);
         bBold       = data->GetInt(TEXT("bold"), 0) != 0;
         bItalic     = data->GetInt(TEXT("italic"), 0) != 0;
         bUnderline  = data->GetInt(TEXT("underline"), 0) != 0;
-        extentWidth = data->GetInt(TEXT("extentWidth"), 0);
-        extentHeight= data->GetInt(TEXT("extentHeight"), 0);
-        bUsePointFiltering = data->GetInt(TEXT("pointFiltering"), 0) != 0;
-		
-        baseSize.x  = data->GetFloat(TEXT("baseSizeCX"), 100);
-        baseSize.y  = data->GetFloat(TEXT("baseSizeCY"), 100);
-
         bUseOutline    = data->GetInt(TEXT("useOutline")) != 0;
         outlineColor   = data->GetInt(TEXT("outlineColor"), 0xFF000000);
         outlineSize    = data->GetFloat(TEXT("outlineSize"), 2);
         outlineOpacity = data->GetInt(TEXT("outlineOpacity"), 100);
 
-        backgroundColor   = data->GetInt(TEXT("backgroundColor"), 0xFF000000);
-        backgroundOpacity = data->GetInt(TEXT("backgroundOpacity"), 0);
+		//Nickname
+		bUseNickname = data->GetInt(TEXT("useNickname"), 0) != 0;
+		NicknameFallbackColor = data->GetInt(TEXT("NicknameFallbackColor"), 0) ;
+		bUseNicknameColor = data->GetInt(TEXT("useNicknameColor"), 0) != 0;
+        strNicknameFont			= data->GetString(TEXT("nicknameFont"), TEXT("Arial"));
+        nicknameSize			= data->GetInt(TEXT("nicknameSize"), 48);
+		nicknameColor			= data->GetInt(TEXT("nicknameColor"), 0xFFFFFFFF);
+        nicknameOpacity			= data->GetInt(TEXT("nicknameOpacity"), 100);
+        bNicknameBold			= data->GetInt(TEXT("nicknameBold"), 0) != 0;
+        bNicknameItalic			= data->GetInt(TEXT("nicknameItalic"), 0) != 0;
+        bNicknameUnderline		= data->GetInt(TEXT("nicknameUnderline"), 0) != 0;
+        bNicknameUseOutline		= data->GetInt(TEXT("nicknameUseOutline")) != 0;
+        nicknameOutlineColor	= data->GetInt(TEXT("nicknameOutlineColor"), 0xFF000000);
+        nicknameOutlineSize		= data->GetFloat(TEXT("nicknameOutlineSize"), 2);
+        nicknameOutlineOpacity	= data->GetInt(TEXT("nicknameOutlineOpacity"), 100);
+        bNicknameOutlineAutoColor	= data->GetInt(TEXT("nicknameOutlineAutoColor")) != 0;
 
-		NumOfLines = data->GetInt(TEXT("NumOfLines"), 0);
+		//Connection
 		iServer = data->GetInt(TEXT("iServer"), 0);
 		iPort = data->GetInt(TEXT("iPort"), 0);
 		Nickname    = data->GetString(TEXT("Nickname"));
         Password    = data->GetString(TEXT("Password"));
 		Channel		= data->GetString(TEXT("Channel"));
 		bUseJustinfan = data->GetInt(TEXT("useJustinfan"),1) != 0;
-		bUseNickname = data->GetInt(TEXT("useNickname"), 0) != 0;
-		bUseNicknameColor = data->GetInt(TEXT("useNicknameColor"), 0) != 0;
-		NicknameFallbackColor = data->GetInt(TEXT("NicknameFallbackColor"), 0) ;
+
         bUpdateTexture = true;
 		TryConnect();
     }
@@ -620,35 +749,40 @@ public:
             {Channel = lpVal; TryConnect();}
 		else if(scmpi(lpName, TEXT("font")) == 0)
             strFont = lpVal;
+		else if(scmpi(lpName, TEXT("nicknameFont")) == 0)
+            strNicknameFont = lpVal;
 
         bUpdateTexture = true;
     }
 
     void SetInt(CTSTR lpName, int iValue)
     {
-        if(scmpi(lpName, TEXT("extentWidth")) == 0)
-        {
-            //showExtentTime = 2.0f;
-            extentWidth = iValue;
+        if(scmpi(lpName, TEXT("extentWidth")) == 0) {            
+            extentWidth = iValue; //showExtentTime = 2.0f;
 			return;
         }
-        else if(scmpi(lpName, TEXT("extentHeight")) == 0)
-        {
-            //showExtentTime = 2.0f;
-            extentHeight = iValue;
+        else if(scmpi(lpName, TEXT("extentHeight")) == 0) {
+            extentHeight = iValue; //showExtentTime = 2.0f;
 			return;
         }
-
-        if(scmpi(lpName, TEXT("color")) == 0)
-            color = iValue;
-        else if(scmpi(lpName, TEXT("fontSize")) == 0)
+		
+        if(scmpi(lpName, TEXT("NumOfLines")) == 0)
+            NumOfLines = iValue;
+        else if(scmpi(lpName, TEXT("scrollSpeed")) == 0)
+            scrollSpeed = iValue;
+        else if(scmpi(lpName, TEXT("backgroundColor")) == 0)
+            backgroundColor = iValue;
+        else if(scmpi(lpName, TEXT("backgroundOpacity")) == 0)
+            backgroundOpacity = iValue;
+		else if(scmpi(lpName, TEXT("pointFiltering")) == 0)
+			bUsePointFiltering = iValue != 0;
+		//----------------------------------------------------------------
+		else if(scmpi(lpName, TEXT("fontSize")) == 0)
             size = iValue;
+        else if(scmpi(lpName, TEXT("color")) == 0)
+            color = iValue;
         else if(scmpi(lpName, TEXT("textOpacity")) == 0)
             opacity = iValue;
-        else if(scmpi(lpName, TEXT("scrollSpeed")) == 0)
-        {
-            scrollSpeed = iValue;
-        }
         else if(scmpi(lpName, TEXT("bold")) == 0)
             bBold = iValue != 0;
         else if(scmpi(lpName, TEXT("italic")) == 0)
@@ -661,24 +795,41 @@ public:
             outlineColor = iValue;
         else if(scmpi(lpName, TEXT("outlineOpacity")) == 0)
             outlineOpacity = iValue;
-        else if(scmpi(lpName, TEXT("backgroundColor")) == 0)
-            backgroundColor = iValue;
-        else if(scmpi(lpName, TEXT("backgroundOpacity")) == 0)
-            backgroundOpacity = iValue;
-        else if(scmpi(lpName, TEXT("NumOfLines")) == 0)
-            NumOfLines = iValue;
+		//----------------------------------------------------------------
+		else if(scmpi(lpName, TEXT("useNickname")) == 0)
+            bUseNickname = iValue != 0;
+        else if(scmpi(lpName, TEXT("NicknameFallbackColor")) == 0)
+            NicknameFallbackColor = iValue;
+		else if(scmpi(lpName, TEXT("useNicknameColor")) == 0)
+            bUseNicknameColor = iValue != 0;
+		else if(scmpi(lpName, TEXT("nicknameSize")) == 0)
+            nicknameSize = iValue;
+        else if(scmpi(lpName, TEXT("nicknameColor")) == 0)
+            nicknameColor = iValue;
+        else if(scmpi(lpName, TEXT("nicknameOpacity")) == 0)
+            nicknameOpacity = iValue;
+        else if(scmpi(lpName, TEXT("nicknameBold")) == 0)
+            bNicknameBold = iValue != 0;
+        else if(scmpi(lpName, TEXT("nicknameItalic")) == 0)
+            bNicknameItalic = iValue != 0;
+        else if(scmpi(lpName, TEXT("nicknameUnderline")) == 0)
+            bNicknameUnderline = iValue != 0;
+        else if(scmpi(lpName, TEXT("nicknameUseOutline")) == 0)
+            bNicknameUseOutline = iValue != 0;
+        else if(scmpi(lpName, TEXT("nicknameOutlineColor")) == 0)
+            nicknameOutlineColor = iValue;
+        else if(scmpi(lpName, TEXT("nicknameOutlineOpacity")) == 0)
+            nicknameOutlineOpacity = iValue;
+        else if(scmpi(lpName, TEXT("nicknameOutlineAutoColor")) == 0)
+            bNicknameOutlineAutoColor = iValue != 0;
+		//----------------------------------------------------------------
 	    else if(scmpi(lpName, TEXT("iServer")) == 0)
 			{iServer = iValue; TryConnect();}
 		else if(scmpi(lpName, TEXT("iPort")) == 0)
 			{iPort = iValue; TryConnect();}
 		else if(scmpi(lpName, TEXT("useJustinfan")) == 0)
 			{bUseJustinfan = iValue != 0; TryConnect();}
-		else if(scmpi(lpName, TEXT("useNickname")) == 0)
-            bUseNickname = iValue != 0;
-		else if(scmpi(lpName, TEXT("useNicknameColor")) == 0)
-            bUseNicknameColor = iValue != 0;
-        else if(scmpi(lpName, TEXT("NicknameFallbackColor")) == 0)
-            NicknameFallbackColor = iValue;
+
 
         bUpdateTexture = true;
     }
@@ -687,6 +838,8 @@ public:
     {
         if(scmpi(lpName, TEXT("outlineSize")) == 0)
             outlineSize = fValue;
+        else if(scmpi(lpName, TEXT("nicknameOutlineSize")) == 0)
+            nicknameOutlineSize = fValue;
 		else if(scmpi(lpName, TEXT("baseSizeCX")) == 0)
             baseSize.x = fValue;
 		else if(scmpi(lpName, TEXT("baseSizeCY")) == 0)
@@ -753,9 +906,6 @@ public:
 				last_server=server;  last_port=port;  last_nickname=nickname;
 				last_password=password;  last_channel=channel;
 				ircbot.connect(last_server,last_port,last_nickname,login,last_password,last_channel);
-				Sleep(500);
-				if(ircbot.isConnected()) onSysMsg(L"IRCBot Connected.");
-				else onSysMsg(L"IRCBot Cannot Connect.");
 			}
 		}
 

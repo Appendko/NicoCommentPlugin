@@ -9,6 +9,12 @@ Visual C++ 2010 Runtime Redistributable package
 
 ChangeLog
 ===========
+ - 2014.06.21 Version 0.1.2.3 alpha
+   - Completely Removed the lag due to connecting IRCbot. Connect in a Tick().
+   - Nickname now have its own Font formats and colors.
+   - Auto-determine the suitable outline color for Nicknames with Justin/Twitch Color.
+   - Japanese translation.
+ 
  - 2014.06.18 Version 0.1.2.2 alpha
    - Improved stability
    - Removed all Timer functions. use Tick() in OBS to trigger the events instead.
