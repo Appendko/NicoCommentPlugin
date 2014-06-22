@@ -43,9 +43,9 @@ public:
 	}
 	
 	void StartThread() {
-		onDebugMsg(L"Before StartThread(): Thread %d",(int)thread);
+		onSysMsg(L"StartThread(): Thread %d",(int)thread);
 		if(thread==0) {
-			onDebugMsg(L"Begin StartThread(): Thread %d",(int)thread);
+			//onDebugMsg(L"Begin StartThread(): Thread %d",(int)thread);
 			bKillThread = false;
 			thread = CreateThread(NULL, 0, ThreadProc, (LPVOID)this, 0, NULL);
 		}
@@ -53,9 +53,9 @@ public:
 		
 	void StopThread () {
 		bKillThread = true;
-		onDebugMsg(L"Before StopThread(): Thread %d",(int)thread);
+		onSysMsg(L"StopThread(): Thread %d",(int)thread);
 		if(thread!=0) {
-			onDebugMsg(L"Begin StopThread(): Thread %d",(int)thread);
+			//onDebugMsg(L"Begin StopThread(): Thread %d",(int)thread);
 			DWORD retv;
 
 			retv=WaitForSingleObject(thread,30000);
@@ -70,13 +70,13 @@ public:
 					TerminateThread(thread,exitcode);
 					break;
 				case WAIT_FAILED:
-					if(thread==0) onDebugMsg(L"Thread Closing: Already Closed, thread=%d",thread);
+					if(thread==0) onSysMsg(L"Thread Closing: Already Closed, thread=%d",thread);
 					else onDebugMsg(L"Thread Closing: FAILED, thread=%d",thread);
 					break;
 				case WAIT_OBJECT_0:
-					onDebugMsg(L"Thread Closing: Finished");
+					onSysMsg(L"Thread Closing: Finished");
 			}
-			onDebugMsg(L"Thread Closed: RETV = 0x%08X",retv);
+			onSysMsg(L"Thread Closed: RETV = 0x%08X",retv);
 			if(thread!=0) {
 				CloseHandle(thread);
 				thread = 0;

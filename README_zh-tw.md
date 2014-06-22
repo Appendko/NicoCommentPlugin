@@ -9,6 +9,10 @@ Visual C++ 2010 可轉散發套件
 
 更新紀錄
 ===========
+ - 2014.06.22 Version 0.1.3.0 beta
+   - 修正user color map的錯誤 - 現在他會在使用者改變顏色的時候更新map內的資料。
+   - 強迫LoginCheckTask()在AliveCheckTasks()中執行，而且必須在異常斷線檢查之後。
+
  - 2014.06.21 Version 0.1.2.3 alpha
    - 完全消除啟動的延遲時間。在Tick()中才觸發連線的判定。
    - 暱稱現在有自己的字型設定和顏色。

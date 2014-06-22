@@ -9,6 +9,10 @@ Visual C++ 2010 Runtime Redistributable package
 
 ChangeLog
 ===========
+ - 2014.06.22 Version 0.1.3.0 beta
+   - Fix the bug of user color map - now it updates data when a user changes his/her color.
+   - Force LoginCheckTask() run in AliveCheckTasks() after disconnection check.
+
  - 2014.06.21 Version 0.1.2.3 alpha
    - Completely Removed the lag due to connecting IRCbot. Connect in a Tick().
    - Nickname now have its own Font formats and colors.

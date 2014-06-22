@@ -127,6 +127,7 @@ IRCBotStatus IRCBot::AliveCheckTask() {
 			ircmsgThread->sendRaw(L"PING");
 			break;
 	} 
+	if(iStatus==BOT_CONNECTED) LoginCheckTask();
 	return iStatus;
 }
 
@@ -170,14 +171,14 @@ void IRCBot::close(){
 				threadRunning = false;
 				//close threads
 				if(ircmsgThread->iStatus==IRC_NORMAL) {
-					onDebugMsg(TEXT("IRCBot.close: Closing IRCBot-ircmsgThread"));
+					onSysMsg(TEXT("IRCBot.close: Closing IRCBot-ircmsgThread"));
 					ircmsgThread->sendRaw(L"QUIT :Leaving");
 					ircmsgThread->interruptSignal();
 					Sleep(100);
 					TheSocket->CloseSocket();
 					ircmsgThread->StopThread();
 				}
-				onDebugMsg(L"IRCBot.close: All threads closed, IRCBot Stopped");
+				onSysMsg(L"IRCBot.close: All threads closed, IRCBot Stopped");
 		}
 		iStatus=BOT_CLOSED;
 }		
@@ -210,9 +211,9 @@ void IRCBot::onConnectSuccess(){
 	//	AliveCheckTask(); //Determine the message
 	//}
 	//else{ //ircmsgThread is running
-	iStatus=BOT_CONNECTED;	
 	Sleep(500); 
-	LoginCheckTask(); //Check for once
+	iStatus=BOT_CONNECTED;	
+	//LoginCheckTask(); //Check for once
 	//}
 }
 

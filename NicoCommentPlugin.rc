@@ -99,7 +99,7 @@ FONT 8, "MS Shell Dlg", 400, 0, 1
     EDITTEXT        IDC_NICKNAME, 146, 258, 70, 14, ES_AUTOHSCROLL, WS_EX_LEFT
     RTEXT           "Connection.Password", IDC_STATIC, 217, 260, 50, 8, SS_RIGHT, WS_EX_LEFT
     EDITTEXT        IDC_PASSWORD, 276, 258, 80, 14, ES_AUTOHSCROLL | ES_PASSWORD, WS_EX_LEFT
-    LTEXT           "Nico Comment Plugin, Alpha Test Version", IDC_STATIC, 10, 290, 125, 8, SS_LEFT, WS_EX_LEFT
+    LTEXT           "Nico Comment Plugin, Beta Test Version", IDC_STATIC, 10, 290, 125, 8, SS_LEFT, WS_EX_LEFT
     LTEXT           "Created by Append Huang", IDC_STATIC, 10, 302, 81, 8, SS_LEFT, WS_EX_LEFT
     PUSHBUTTON      "OK", IDOK, 261, 297, 50, 14, 0, WS_EX_LEFT
     PUSHBUTTON      "Cancel", IDCANCEL, 315, 297, 50, 14, 0, WS_EX_LEFT

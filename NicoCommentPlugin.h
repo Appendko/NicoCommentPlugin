@@ -526,9 +526,9 @@ public:
 		Lcomment = new std::list<Comment>;
 		duration = 0.0f;
 
-        onSysMsg(L"Using Nico Comment Plugin Version %d.%d.%d.%d Alpha",PLUGIN_VERSION);
+        onSysMsg(L"Using Nico Comment Plugin Version %d.%d.%d.%d BETA",PLUGIN_VERSION);
 		zero(&Row,sizeof(UINT)*10);
-		login=L"NICO_COMMENT_PLUGIN_ALPHA"; //not used
+		login=L"NICO_COMMENT_PLUGIN_BETA"; //not used
 
     }
 
@@ -850,7 +850,7 @@ public:
 
 	void TryConnect()
 	{
-		login=std::wstring(L"NICO_COMMENT_PLUGIN_ALPHA"); //not used
+		login=std::wstring(L"NICO_COMMENT_PLUGIN_BETA"); //not used
 		switch(iServer){
 			case 0: 	{server=std::wstring(L"irc.twitch.tv");break;}
 			case 1: 	{server=std::wstring(L"irc.justin.tv");break;}

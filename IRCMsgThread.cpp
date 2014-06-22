@@ -69,8 +69,8 @@ DWORD IRCMsgThread::Run() {
 	}
 	//Determine the reason to break the loop.
 	if(!bKillThread) {
-		if(iStatus==IRC_DISCONNECTED) onDebugMsg(L"IRCMsgThread: Disconnect Unexpectedly");
-		if(iStatus==IRC_WRONGLOGIN) onDebugMsg(L"IRCMsgThread: Wrong Login Information");
+		if(iStatus==IRC_DISCONNECTED) onSysMsg(L"IRCMsgThread: Disconnect Unexpectedly");
+		if(iStatus==IRC_WRONGLOGIN) onSysMsg(L"IRCMsgThread: Wrong Login Information");
 	}
 	else iStatus=IRC_CLOSED;
 	//onDebugMsg(L"[Last Buffer]%ls",from_utf8(recvstring).c_str());
@@ -192,7 +192,8 @@ void IRCMsgThread::SetUserColor(std::wstring User,std::wstring Color){ //already
 		else if(Color.compare(L"deeppink")==0)		iColor=0x00FF1493;
 	}
 	//onDebugMsg(L"SetUserColor: %ls, %ls, 0X%08X\n",User.c_str(),Color.c_str(),iColor);
-		UserColorMap.insert( std::pair<std::wstring,unsigned int>(User,iColor|0xFF000000) );
+		std::pair<std::map<std::wstring,unsigned int>::iterator,bool> ret=UserColorMap.insert( std::pair<std::wstring,unsigned int>(User,iColor|0xFF000000) );
+		if (ret.second==false) ret.first->second=iColor|0xFF000000;
 }
 
 unsigned int IRCMsgThread::GetUserColor(std::wstring User){
