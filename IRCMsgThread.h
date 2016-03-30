@@ -28,7 +28,8 @@ class IRCMsgThread : public SimpleThread { // Dealing with Received Message
 	Concurrency::concurrent_queue<TircMsg> IRCMsgQueue; 
 	std::map<std::wstring,unsigned int> UserColorMap;
 	virtual DWORD Run();
-	std::wstring getUsername(std::wstring sender);
+	std::wstring getUsername(std::wstring sender,std::wstring backup);
+	std::wstring getBackupUsername(std::wstring backup);
 	void onChatMsg(std::wstring channel, std::wstring nickname, bool isOp, std::wstring message);
     void onChatAction(std::wstring channel, std::wstring nickname, std::wstring action);
 	void onPrivateMsg(std::wstring nickname, std::wstring message);

@@ -9,6 +9,12 @@ Visual C++ 2010 Runtime Redistributable package
 
 ChangeLog
 ===========
+ - 2016.03.30 Version 0.1.3.6 beta
+   - Remove Justin.tv support and Port 443
+   - Rewrite the UserColor parser to get information from TAGS
+   - Use DisplayName instead of ID
+   - Rebuild messages from characters (Lcomment) and draw each messages at once.
+
  - 2014.06.22 Version 0.1.3.0 beta
    - Fix the bug of user color map - now it updates data when a user changes his/her color.
    - Force LoginCheckTask() run in AliveCheckTasks() after disconnection check.

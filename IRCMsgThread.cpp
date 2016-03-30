@@ -56,14 +56,24 @@ DWORD IRCMsgThread::Run() {
 		std::stringstream recvstr(recvstring);
 		while( recvstr.tellg() < bufferlen ) {
 			std::getline(recvstr,msg,'\n');
-			int colon_pos = (int)msg.find(":");
-			if (msg[0] != ':' && colon_pos > 0) msg=msg.substr(colon_pos); //if an irc message begins with " ", then trim the leading spaces   
+			//Old Style
+			//:daziesel92!daziesel92@daziesel92.tmi.twitch.tv PRIVMSG #ptken :what song is this ?
+			//PING LAG1967655232
+			//int colon_pos = (int)msg.find(":");
+			//if (msg[0] != ':' && colon_pos > 0) msg=msg.substr(colon_pos); //if an irc message begins with " ", then trim the leading spaces   
+			//
+			//New Style
+			// @color=#FF4500;display-name=Gm470520;emotes=;mod=0;room-id=47281189;subscriber=1;turbo=0;user-id=24255667;user-type= :gm470520!gm470520@gm470520.tmi.twitch.tv PRIVMSG #tetristhegrandmaster3 :這片到底在沖三小w
+			int at_pos = (int)msg.find("@");
+			if (msg[0] != '@' && at_pos > 0) msg=msg.substr(at_pos); //if an irc message begins with " ", then trim the leading spaces   
 			if (msg[msg.length()-1]=='\r') msg=msg.substr(0,msg.length()-1); //trim the CR: getline only trim the LF		                   
 			log(from_utf8(msg), LogType(RECEIVE)); //Although log file is in UTF8....using vswprintf
+			//Ping Check
 			umsg=msg.substr(0,5);
 			ToUpperString(umsg);
             if (!umsg.compare("PING ")) sendRaw( L"PONG " + from_utf8(msg.substr(5)) ); // respond to PINGs //Reply Immediately 
-            else parseMessage(from_utf8(msg));
+			//Then parse the message
+            else parseMessage(from_utf8(msg)); 
 		}
 		Sleep(100);
 	}
@@ -79,21 +89,49 @@ DWORD IRCMsgThread::Run() {
 	return 0;
 }
 
-std::wstring IRCMsgThread::getUsername(std::wstring sender){
+std::wstring IRCMsgThread::getUsername(std::wstring sender,std::wstring backup){
     //parse twitch username from twitch chats
-    //ex: user!user@user.tmi.twitch.tv -> user
-    if(sender.find(L"!")!=std::wstring::npos){
+    //Old Style: ex: user!user@user.tmi.twitch.tv -> user	
+    /*if(sender.find(L"!")!=std::wstring::npos){
         return sender.substr(0,sender.find(L"!"));
-    } else return sender;
+    } else return sender;*/
+	//New Style: ex: color=#1E90FF;display-name=pikads;emotes=;mod=1;room-id=24805060;subscriber=0;turbo=0;user-id=25141849;user-type=mod
+
+	//if the number of tokens is wrong, return Old Style username
+	std::vector<std::wstring> tag_parse = split(sender,L';',9);
+	if(tag_parse.size()<9) return getBackupUsername(backup);
+	std::vector<std::wstring> name_parse = split(tag_parse[1],L'=',2);
+	std::wstring name;
+	if(name_parse.size()<2) name = getBackupUsername(backup);	
+	else {	//New style username	
+	name=name_parse[1]; //return name when displayname has something
+	}
+	//set color when color has something
+	//color: SetUserColor(std::wstring User,std::wstring Color), need lowercase
+	std::vector<std::wstring> color_parse = split(tag_parse[0],L'=',2);
+	std::wstring lower_name=name;
+	if(color_parse.size()==2) SetUserColor(ToLowerString(lower_name),ToLowerString(color_parse[1])); 
+	
+	return name;
+}
+
+std::wstring IRCMsgThread::getBackupUsername(std::wstring backup){
+	if(backup.find(L"!")!=std::wstring::npos) {//Old Style
+		onSysMsg(L"Old Style Name %ls",backup.substr(0,backup.find(L"!")));
+		return backup.substr(0,backup.find(L"!")); 
+	}
+	else return backup;
 }
 
 void IRCMsgThread::onChatMsg(std::wstring channel, std::wstring nickname, bool isOp, std::wstring message){
-    onIRCMsg(L"[CHAT] %ls: %ls\n", nickname.c_str(), message.c_str());
-	if(nickname.compare(L"nightbot")!=0&&nickname.compare(L"moobot")!=0&&nickname.compare(L"jtv")!=0) {
+    //onSysMsg(L"[CHAT] %ls: %ls\n", nickname.c_str(), message.c_str());
+	std::wstring lower_name=nickname;
+	ToLowerString(lower_name);
+	if(lower_name.compare(L"nightbot")!=0&&lower_name.compare(L"moobot")!=0&&lower_name.compare(L"jtv")!=0) {
 		TircMsg ircMsg;
 		ircMsg.user=nickname;
 		ircMsg.msg=message;
-		ircMsg.usercolor=GetUserColor(nickname);
+		ircMsg.usercolor=GetUserColor(lower_name);
 		IRCMsgQueue.push(ircMsg);
 	}
 }
@@ -102,15 +140,15 @@ void IRCMsgThread::onChatAction(std::wstring channel, std::wstring nickname, std
     /*onIRCMsg(L"[ACTION] %ls %ls\n", nickname.c_str(), action.c_str());*/
 }
 
-void IRCMsgThread::onPrivateMsg(std::wstring nickname, std::wstring message){
+void IRCMsgThread::onPrivateMsg(std::wstring nickname, std::wstring message){ //never used that in new style
     //onIRCMsg(L"[PRIVATE] %ls: %ls\n", nickname.c_str(), message.c_str());
 	//Parsing PRIVATEMSG
-    if(!nickname.compare(L"jtv")){
-        if(!message.substr(0,10).compare(L"USERCOLOR ")){
+    //if(!nickname.compare(L"jtv")){
+        /*if(!message.substr(0,10).compare(L"USERCOLOR ")){
             std::vector<std::wstring> parse = split(message,L' ',3);
 			SetUserColor(parse[1],ToLowerString(parse[2]));
 			//onDebugMsg(L"[COLOR] %ls -> %ls\n", parse[1].c_str(), parse[2].c_str());
-        }
+        }*/
 		/*else if(!message.substr(0,10).compare(L"CLEARCHAT ")){ //message.matches("^CLEARCHAT .*")
             vector<wstring> parse = split(message,L' ',2);
             onDebugMsg(L"[BAN OR TIMEOUT] %s has been banned or timeoutted\n",parse[1].c_str());
@@ -119,37 +157,51 @@ void IRCMsgThread::onPrivateMsg(std::wstring nickname, std::wstring message){
         }else if(!message.substr(0,30).compare(L"You are banned from talking in")){
             onDebugMsg(L"[OOPS] %ls\n", message.c_str());
         }*/
-    }		
+    //}		
 }
 
 void IRCMsgThread::parseMessage(std::wstring message){
-	std::vector<std::wstring> firstParse = split(message,L' ',3);
-    if(firstParse.size()<2) return; //Do Nothing
-    if(!firstParse[1].compare(L"PRIVMSG")){
-        std::vector<std::wstring> parse = split(message,L' ',4);
-		if(parse.size() < 4) return; //discard this incomplete message
+	//Old Style
+	//:daziesel92!daziesel92@daziesel92.tmi.twitch.tv PRIVMSG #ptken :what song is this ?
+	//
+	//New Style
+	//@color=#FF4500;display-name=Gm470520;emotes=;mod=0;room-id=47281189;subscriber=1;turbo=0;user-id=24255667;user-type= :gm470520!gm470520@gm470520.tmi.twitch.tv PRIVMSG #tetristhegrandmaster3 :這片到底在沖三小w
+	//@color=#1E90FF;display-name=pikads;emotes=;mod=1;room-id=24805060;subscriber=0;turbo=0;user-id=25141849;user-type=mod :pikads!pikads@pikads.tmi.twitch.tv PRIVMSG #ptken :诶
+	std::vector<std::wstring> firstParse = split(message,L' ',4);
+    if(firstParse.size()<3) return; //Do Nothing
+	//parse[0]=@color=#1E90FF;display-name=pikads;emotes=;mod=1;room-id=24805060;subscriber=0;turbo=0;user-id=25141849;user-type=mod
+	//parse[1]=:pikads!pikads@pikads.tmi.twitch.tv
+	//parse[2]=PRIVMSG
+	//parse[3]=#ptken
+	//parse[4]=:诶
+    if(!firstParse[2].compare(L"PRIVMSG")){
+        std::vector<std::wstring> parse = split(message,L' ',5);
+		if(parse.size() < 5) return; //discard this incomplete message
         /*
-         * parse[0].substr(1): sender
-         * parse[2]: target channel/user
-         * parse[3].subString(1): message
+         * parse[1].substr(1): sender
+         * parse[3]: target channel/user
+         * parse[4].subString(1): message
          */
-        if(parse[2][0]==L'#'){
-            std::wstring content = parse[3].substr(1);	
-			
+		//std::wstring sender = getUsername(parse[1].substr(1)); Old Style
+		std::wstring sender = getUsername(parse[0].substr(1),parse[1].substr(1));
+		std::wstring target = parse[3]; //maybe need .c_str(), but never used in the plugin
+		std::wstring content = parse[4].substr(1);
+        if(parse[3][0]==L'#'){
             if(!content.substr(0,8).compare(L"ACTION ")){
-                onChatAction(parse[2].c_str(), getUsername(parse[0].substr(1)).c_str(), replaceFirst(content.substr(8),L"", L"").c_str());
+                //onChatAction(target, sender, replaceFirst(content.substr(8),L"", L"").c_str());
+				onChatAction(target, sender, content);
             }else{
-                onChatMsg(parse[2].c_str(), getUsername(parse[0].substr(1)).c_str(), false, parse[3].substr(1).c_str());
+                onChatMsg(target, sender, false, content);
             }
         }else{
-            onPrivateMsg(getUsername(parse[0].substr(1)), parse[3].substr(1));
+            onPrivateMsg(sender, content); //not sure about the number of tokens, but for a plugin, never mind.
         }
         
-    }else if(!firstParse[1].compare(L"JOIN")){
+    }else if(!firstParse[1].compare(L"JOIN")){ //JOIN: LOG to [SYS]
         std::vector<std::wstring> parse = split(message,L' ',3);
 		if(parse.size() < 3) return; //discard this incomplete message
-        if(!(getUsername(parse[0].substr(1)).compare(ToLowerString(ircbotPtr->lastIRCNickname)))){ //user succesffully joins a channel
-            onSysMsg(L"Joined %ls",parse[2].c_str());
+        if(!(parse[2].compare(ToLowerString(ircbotPtr->lastIRCChannel)))){ //user succesffully joins a channel
+//            onSysMsg(L"Joined %ls",parse[2]);
         }
 	/*	else { //other users join the channel
 			onIRCMsg(L"%ls Joined %ls\n",getUsername(parse[0].substr(1)).c_str(),parse[2].c_str());

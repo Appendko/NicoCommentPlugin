@@ -1,7 +1,7 @@
 #ifndef IDC_STATIC
 #define IDC_STATIC (-1)
 #endif
-#define PLUGIN_VERSION 0,1,3,0
+#define PLUGIN_VERSION 0,1,3,6
 #define IDD_CONFIG                              101
 #define IDC_EXTENTWIDTH_EDIT                    1001
 #define IDC_EXTENTWIDTH                         1002

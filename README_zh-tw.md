@@ -9,6 +9,12 @@ Visual C++ 2010 可轉散發套件
 
 更新紀錄
 ===========
+ - 2016.03.30 Version 0.1.3.6 beta
+   - 移除對Justin.tv的支援，Port移除443
+   - 從tags取得使用者ID顏色
+   - 用DisplayName取代原本的ID顯示
+   - 從字元的List重新建構出每個訊息，然後每次直接渲染整條訊息
+
  - 2014.06.22 Version 0.1.3.0 beta
    - 修正user color map的錯誤 - 現在他會在使用者改變顏色的時候更新map內的資料。
    - 強迫LoginCheckTask()在AliveCheckTasks()中執行，而且必須在異常斷線檢查之後。

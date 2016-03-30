@@ -7,4 +7,9 @@
     <LocalDebuggerWorkingDirectory>D:\Streaming\OBS\Current\64bit</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LocalDebuggerWorkingDirectory>D:\Streaming\OBS\Current\32bit</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommand>D:\Streaming\OBS\Current\32bit\OBS.exe</LocalDebuggerCommand>
+  </PropertyGroup>
 </Project>

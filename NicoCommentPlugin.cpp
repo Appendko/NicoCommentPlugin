@@ -161,7 +161,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 SendMessage(GetDlgItem(hwnd, IDC_ITALIC), BM_SETCHECK, data->GetInt(TEXT("italic"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
                 SendMessage(GetDlgItem(hwnd, IDC_UNDERLINE), BM_SETCHECK, data->GetInt(TEXT("underline"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
 
-				bool bCheckedOutline = data->GetInt(TEXT("useOutline"), 0) != 0;
+				bool bCheckedOutline = data->GetInt(TEXT("useOutline"), 1) != 0;
                 SendMessage(GetDlgItem(hwnd, IDC_USEOUTLINE), BM_SETCHECK, bCheckedOutline ? BST_CHECKED : BST_UNCHECKED, 0);
                 EnableWindow(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS_EDIT), bCheckedOutline);
                 EnableWindow(GetDlgItem(hwnd, IDC_OUTLINETHICKNESS), bCheckedOutline);
@@ -176,7 +176,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 SendMessage(GetDlgItem(hwnd, IDC_OUTLINEOPACITY), UDM_SETPOS32, 0, data->GetInt(TEXT("outlineOpacity"), 100));
 
 				//Groupbox.Nickname----------------------------------------
-				bool bCheckedNickname = data->GetInt(TEXT("useNickname"), 0) != 0;
+				bool bCheckedNickname = data->GetInt(TEXT("useNickname"), 1) != 0;
 				SendMessage(GetDlgItem(hwnd, IDC_USENICKNAME), BM_SETCHECK, bCheckedNickname ? BST_CHECKED : BST_UNCHECKED, 0);
 				EnableWindow(GetDlgItem(hwnd, IDC_USENICKNAMECOLOR), bCheckedNickname);
 				EnableWindow(GetDlgItem(hwnd, IDC_NICKNAMEFALLBACKCOLOR), bCheckedNickname);
@@ -199,7 +199,7 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
                 SendMessage(GetDlgItem(hwnd, IDC_NICKNAMEITALIC), BM_SETCHECK, data->GetInt(TEXT("nicknameItalic"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
                 SendMessage(GetDlgItem(hwnd, IDC_NICKNAMEUNDERLINE), BM_SETCHECK, data->GetInt(TEXT("nicknameUnderline"), 0) ? BST_CHECKED : BST_UNCHECKED, 0);
 
-                bool bCheckedNicknameOutline = data->GetInt(TEXT("nicknameUseOutline"), 0) != 0;
+                bool bCheckedNicknameOutline = data->GetInt(TEXT("nicknameUseOutline"), 1) != 0;
                 SendMessage(GetDlgItem(hwnd, IDC_NICKNAMEUSEOUTLINE), BM_SETCHECK, bCheckedNicknameOutline ? BST_CHECKED : BST_UNCHECKED, 0);
 
                 EnableWindow(GetDlgItem(hwnd, IDC_NICKNAMEOUTLINEAUTOCOLOR), bCheckedNickname && bCheckedUseNicknameColor && bCheckedNicknameOutline);
@@ -217,14 +217,13 @@ INT_PTR CALLBACK ConfigureTextProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 				SendMessage(GetDlgItem(hwnd, IDC_NICKNAMEOUTLINEAUTOCOLOR), BM_SETCHECK, data->GetInt(TEXT("nicknameOutlineAutoColor"), 1) ? BST_CHECKED : BST_UNCHECKED, 0);
 				//Groupbox.Connection----------------------------------------
                 HWND hwndIRCServer = GetDlgItem(hwnd, IDC_IRCSERVER);
+                SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Twitch (irc.chat.twitch.tv)");
                 SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Twitch (irc.twitch.tv)");
-                SendMessage(hwndIRCServer, CB_ADDSTRING, 0, (LPARAM)L"Justin.tv (irc.justin.tv)");
                 int iServer = data->GetInt(TEXT("iServer"), 0);
                 ClampVal(iServer, 0, 1);
                 SendMessage(hwndIRCServer, CB_SETCURSEL, iServer, 0);
 
                 HWND hwndIRCPort = GetDlgItem(hwnd, IDC_PORT);
-                SendMessage(hwndIRCPort, CB_ADDSTRING, 0, (LPARAM)L"443");
                 SendMessage(hwndIRCPort, CB_ADDSTRING, 0, (LPARAM)L"6667");
 				SendMessage(hwndIRCPort, CB_ADDSTRING, 0, (LPARAM)L"80");
                 int iPort = data->GetInt(TEXT("iPort"), 0);

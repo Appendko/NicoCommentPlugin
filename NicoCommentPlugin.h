@@ -36,9 +36,9 @@
 
 // Message Queued for some time: 
 // The Frequency of UpdateTexture
-#define fMsgBufferTime 1.0f
+#define fMsgBufferTime 0.5f
 #define fMsgSpeed (float)(scrollSpeed*extentWidth) / 50.0f
-#define fRatio 1.01f
+#define fRatio 1.05f
 #define iNumChars 1
 
 #define ClampVal(val, minVal, maxVal) \
@@ -60,6 +60,7 @@ typedef struct comment {
 	Gdiplus::RectF boundingBox;
 	UINT comment_color;
 	MSGTYPE MsgType;
+	UINT MsgID;
 } Comment;
 
 
@@ -128,6 +129,7 @@ class NicoCommentPlugin : public ImageSource
 
 	std::list<Comment> *Lcomment;
 	UINT		Row[10];
+	UINT		last_RandID;
 	IRCBot		ircbot;
 
     bool        bDoUpdate;
@@ -330,7 +332,12 @@ class NicoCommentPlugin : public ImageSource
 
 	}
 
-	float PushMsgIntoList(std::wstring msg, UINT rand_num, UINT iColor, float tmpX, MSGTYPE MsgType ) {
+	float PushMsgIntoList(std::wstring msg, UINT rand_row, UINT iColor, float tmpX, MSGTYPE MsgType ) {
+		//Generate Unique ID for each message
+		UINT UniqueID;
+		do { rand_s(&UniqueID);	} while(UniqueID==last_RandID); 
+		last_RandID=UniqueID;
+
 		UINT msglen=(UINT)msg.length();
 		if(msglen>0){
 			//Parse into iNumChars characters....need tuning, maybe 10 or higher
@@ -342,12 +349,13 @@ class NicoCommentPlugin : public ImageSource
 				{
 				Comment tmp_comment;
 				tmp_comment.comment_str=String(Qtmp.front().c_str());
-				tmp_comment.comment_Row=rand_num;
+				tmp_comment.comment_Row=rand_row;
 				tmp_comment.comment_color=iColor;
 				tmp_comment.MsgType=MsgType;
+				tmp_comment.MsgID=UniqueID; //Unique ID
 				Row[tmp_comment.comment_Row]++;
 				tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
-				Gdiplus::PointF origin(tmpX,float(rand_num)/float(NumOfLines)*(float)extentHeight);
+				Gdiplus::PointF origin(tmpX,float(rand_row)/float(NumOfLines)*(float)extentHeight);
 				//MeasureString: calculate the corresponding bounding Box;
 				tmpX=Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox, MsgType);
 				Lcomment->push_back(tmp_comment);
@@ -418,56 +426,95 @@ class NicoCommentPlugin : public ImageSource
 		Gdiplus::FontFamily fontFamily;
 		Gdiplus::Font* font;
 
-		for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
-			//Check For Fallback;
-/*			SelectObject(hTempDC,hFont);
-			WORD GlyInd='\0';
-			GetGlyphIndicesW(hTempDC,it->comment_str.Array(),1,&GlyInd,GGI_MARK_NONEXISTING_GLYPHS);
-			if(GlyInd==0xFFFF) {
-				font=&fallbackfont;
-				font->GetFamily(&fontFamily);
-			}
-			else {		
-				font=&userFont;
-				font->GetFamily(&fontFamily);
-			}*/
-			bool bCommentUseOutline = false;
-			DWORD tmp_OutlineColor=outlineColor;
-			switch(it->MsgType){
-				case MSG_USER:
-					font=&userFont;
-					font->GetFamily(&fontFamily);
-					bCommentUseOutline=bNicknameUseOutline;
-					if(bNicknameOutlineAutoColor&&bUseNicknameColor){ 
-						UINT brightness=((it->comment_color&0x00FF0000)>>16) + ((it->comment_color&0x0000FF00)>>8) + (it->comment_color&0x000000FF);
-						if( brightness > 3*128 ) tmp_OutlineColor=0xFF000000;//(black line)
-						else tmp_OutlineColor=0xFFFFFFFF;
-					} else tmp_OutlineColor=nicknameOutlineColor;
 
-					break;
-				case MSG_CHAT:
-					font=&chatFont;
-					font->GetFamily(&fontFamily);
-					bCommentUseOutline=bUseOutline;
-					tmp_OutlineColor=outlineColor;
-					break;
-			}
-			//Draw The Character One By One
-			if(it->boundingBox.GetLeft()<TextureWidth) {		
-				if(bCommentUseOutline) {
-					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
-					path.Reset();
-					path.AddString(it->comment_str, -1, &fontFamily, font->GetStyle(), font->GetSize(), it->boundingBox, &format);
-					DrawOutlineText(graphics, *font, path, format, brush, it->MsgType,tmp_OutlineColor);
-				} else {
-					brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
-					stat = graphics->DrawString(it->comment_str, -1, font, it->boundingBox, &format, brush);
-					if(stat != Gdiplus::Ok)
-	                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
+		if(!Lcomment->empty()) { //Do nothing if Lcomment is empty
+
+			//Rebuild the messages to strings to speed up drawing
+			std::list<Comment> TmpLcomment;
+			Comment tmp_comment;			
+			/*Initialization*/
+			UINT UniqueID;
+			do { rand_s(&UniqueID);	} while(UniqueID==Lcomment->begin()->MsgID); 
+			tmp_comment.MsgID=UniqueID; 
+			tmp_comment.comment_str.Clear();
+			Gdiplus::PointF origin(0.0f,0.0f);
+
+			for (std::list<Comment>::iterator it = Lcomment->begin(); it != Lcomment->end(); it++) {
+				if(it->MsgID!=tmp_comment.MsgID) {// different object: User and Message use different PushMsgIntoList, so it will works normally,
+					if(!tmp_comment.comment_str.IsEmpty()) {
+						Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox, tmp_comment.MsgType); //last value of a comment
+						TmpLcomment.push_back(tmp_comment); 
+					}
+					//typedef struct comment { String comment_str; UINT comment_Row; UINT comment_color; MSGTYPE MsgType; UINT MsgID; Gdiplus::RectF boundingBox; } Comment;		
+					//initialization of next object
+					tmp_comment.comment_str =	it->comment_str;
+					tmp_comment.comment_Row =	it->comment_Row;
+					tmp_comment.comment_color =	it->comment_color;
+					tmp_comment.MsgType =		it->MsgType;
+					tmp_comment.MsgID =			it->MsgID;
+					tmp_comment.boundingBox=Gdiplus::RectF(0.0f,0.0f,32.0f,32.0f);
+					it->boundingBox.GetLocation(&origin); //get the origin of the first character
+				}
+				else { //same object;
+					tmp_comment.comment_str+=it->comment_str;
 				}
 			}
-		}
-        
+			/*Finishing the rebuild*/
+			if(!tmp_comment.comment_str.IsEmpty()) {
+				Calculate_BoundaryBox(tmp_comment.comment_str, origin, tmp_comment.boundingBox, tmp_comment.MsgType);
+				TmpLcomment.push_back(tmp_comment);
+			}
+
+			for (std::list<Comment>::iterator it = TmpLcomment.begin(); it != TmpLcomment.end(); it++) {
+				//Check For Fallback;
+				/*SelectObject(hTempDC,hFont);
+				WORD GlyInd='\0';
+				GetGlyphIndicesW(hTempDC,it->comment_str.Array(),1,&GlyInd,GGI_MARK_NONEXISTING_GLYPHS);
+				if(GlyInd==0xFFFF) {
+					font=&fallbackfont;
+					font->GetFamily(&fontFamily);
+				}
+				else {		
+					font=&userFont;
+					font->GetFamily(&fontFamily);
+				}*/
+				bool bCommentUseOutline = false;
+				DWORD tmp_OutlineColor=outlineColor;
+				switch(it->MsgType){
+					case MSG_USER:
+						font=&userFont;
+						font->GetFamily(&fontFamily);
+						bCommentUseOutline=bNicknameUseOutline;
+						if(bNicknameOutlineAutoColor&&bUseNicknameColor){ 
+							UINT brightness=((it->comment_color&0x00FF0000)>>16) + ((it->comment_color&0x0000FF00)>>8) + (it->comment_color&0x000000FF);
+							if( brightness > 3*128 ) tmp_OutlineColor=0xFF000000;//(black line)
+							else tmp_OutlineColor=0xFFFFFFFF;
+						} else tmp_OutlineColor=nicknameOutlineColor;
+	
+						break;
+					case MSG_CHAT:
+						font=&chatFont;
+						font->GetFamily(&fontFamily);
+						bCommentUseOutline=bUseOutline;
+						tmp_OutlineColor=outlineColor;
+						break;
+				}
+				//Draw The Character One By One
+				if(it->boundingBox.GetLeft()<TextureWidth) {		
+					if(bCommentUseOutline) {
+						brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
+						path.Reset();
+						path.AddString(it->comment_str, -1, &fontFamily, font->GetStyle(), font->GetSize(), it->boundingBox, &format);
+						DrawOutlineText(graphics, *font, path, format, brush, it->MsgType,tmp_OutlineColor);
+					} else {
+						brush->SetColor(Gdiplus::Color(GetAlphaVal(opacity)|(it->comment_color&0x00FFFFFF)));
+						stat = graphics->DrawString(it->comment_str, -1, font, it->boundingBox, &format, brush);
+						if(stat != Gdiplus::Ok)
+		                    AppWarning(TEXT("TextSource::UpdateTexture: Graphics::DrawString failed: %u"), (int)stat);
+					}
+				}
+			}
+        }
         delete brush;
         delete graphics;
 
@@ -589,13 +636,13 @@ public:
 		while(!ircbot.QueueEmpty()){
 			//receive Msg 
 			ircbot.receiveMsg(tircmsg);
-			UINT rand_num=Rand_Height_Generator();
+			UINT rand_row=Rand_Height_Generator();
 			if(bUseNickname) {
 				UINT iColor=NicknameFallbackColor;
 				if(bUseNicknameColor) if(tircmsg.usercolor!=0) iColor=tircmsg.usercolor;
-				tmpX=PushMsgIntoList(tircmsg.user+L": ", rand_num, iColor, tmpX, MSG_USER);
+				tmpX=PushMsgIntoList(tircmsg.user+L": ", rand_row, iColor, tmpX, MSG_USER);
 			}
-			tmpX=PushMsgIntoList(tircmsg.msg, rand_num, color, tmpX, MSG_CHAT);
+			tmpX=PushMsgIntoList(tircmsg.msg, rand_row, color, tmpX, MSG_CHAT);
 		}
 
 		//Update Texture after 1 seconds.
@@ -705,27 +752,27 @@ public:
         bBold       = data->GetInt(TEXT("bold"), 0) != 0;
         bItalic     = data->GetInt(TEXT("italic"), 0) != 0;
         bUnderline  = data->GetInt(TEXT("underline"), 0) != 0;
-        bUseOutline    = data->GetInt(TEXT("useOutline")) != 0;
+        bUseOutline    = data->GetInt(TEXT("useOutline"),1) != 0;
         outlineColor   = data->GetInt(TEXT("outlineColor"), 0xFF000000);
-        outlineSize    = data->GetFloat(TEXT("outlineSize"), 2);
+        outlineSize    = data->GetFloat(TEXT("outlineSize"), 5);
         outlineOpacity = data->GetInt(TEXT("outlineOpacity"), 100);
 
 		//Nickname
 		bUseNickname = data->GetInt(TEXT("useNickname"), 0) != 0;
-		NicknameFallbackColor = data->GetInt(TEXT("NicknameFallbackColor"), 0) ;
+		NicknameFallbackColor = data->GetInt(TEXT("NicknameFallbackColor"), 0xFFFFFF00) ;
 		bUseNicknameColor = data->GetInt(TEXT("useNicknameColor"), 0) != 0;
         strNicknameFont			= data->GetString(TEXT("nicknameFont"), TEXT("Arial"));
         nicknameSize			= data->GetInt(TEXT("nicknameSize"), 48);
-		nicknameColor			= data->GetInt(TEXT("nicknameColor"), 0xFFFFFFFF);
+		nicknameColor			= data->GetInt(TEXT("nicknameColor"), 0xFF000000);
         nicknameOpacity			= data->GetInt(TEXT("nicknameOpacity"), 100);
         bNicknameBold			= data->GetInt(TEXT("nicknameBold"), 0) != 0;
         bNicknameItalic			= data->GetInt(TEXT("nicknameItalic"), 0) != 0;
         bNicknameUnderline		= data->GetInt(TEXT("nicknameUnderline"), 0) != 0;
-        bNicknameUseOutline		= data->GetInt(TEXT("nicknameUseOutline")) != 0;
+        bNicknameUseOutline		= data->GetInt(TEXT("nicknameUseOutline"),1) != 0;
         nicknameOutlineColor	= data->GetInt(TEXT("nicknameOutlineColor"), 0xFF000000);
-        nicknameOutlineSize		= data->GetFloat(TEXT("nicknameOutlineSize"), 2);
+        nicknameOutlineSize		= data->GetFloat(TEXT("nicknameOutlineSize"), 5);
         nicknameOutlineOpacity	= data->GetInt(TEXT("nicknameOutlineOpacity"), 100);
-        bNicknameOutlineAutoColor	= data->GetInt(TEXT("nicknameOutlineAutoColor")) != 0;
+        bNicknameOutlineAutoColor	= data->GetInt(TEXT("nicknameOutlineAutoColor"),1) != 0;
 
 		//Connection
 		iServer = data->GetInt(TEXT("iServer"), 0);
@@ -852,15 +899,14 @@ public:
 	{
 		login=std::wstring(L"NICO_COMMENT_PLUGIN_BETA"); //not used
 		switch(iServer){
-			case 0: 	{server=std::wstring(L"irc.twitch.tv");break;}
-			case 1: 	{server=std::wstring(L"irc.justin.tv");break;}
+			case 0: 	{server=std::wstring(L"irc.chat.twitch.tv");break;}
+			case 1: 	{server=std::wstring(L"irc.twitch.tv");break;}
 			default: 	{server=std::wstring(L"");break;}
 		}
 
 		switch(iPort){			
-			case 0: 	{port=std::wstring(L"443");break;}
-			case 1: 	{port=std::wstring(L"6667");break;}
-			case 2: 	{port=std::wstring(L"80");break;}
+			case 0: 	{port=std::wstring(L"6667");break;}
+			case 1: 	{port=std::wstring(L"80");break;}
 			default: 	{port=std::wstring(L"");break;}
 		}
 

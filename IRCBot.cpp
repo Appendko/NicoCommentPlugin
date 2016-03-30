@@ -191,8 +191,8 @@ void IRCBot::onLoginFailed(){ //Call from LoginCheckTask
 
 void IRCBot::onLoginSuccess(){ //Call from IRCMsgThread
 	onSysMsg(L"Login Successfully");
+    ircmsgThread->sendRaw(L"CAP REQ :twitch.tv/tags");
 	IRC_join(lastIRCChannel);
-    ircmsgThread->sendRaw(L"TWITCHCLIENT 2");
 }
   
 void IRCBot::onAccidentDisconnection(){ //the connection is closed by accident
