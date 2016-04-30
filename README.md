@@ -9,6 +9,8 @@ Visual C++ 2010 Runtime Redistributable package
 
 ChangeLog
 ===========
+ - 2016.04.30 Version 0.1.3.7 beta
+   - Solve the problem that the username becomes something like #FF7F50
  - 2016.03.30 Version 0.1.3.6 beta
    - Remove Justin.tv support and Port 443
    - Rewrite the UserColor parser to get information from TAGS

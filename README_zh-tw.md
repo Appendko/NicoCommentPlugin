@@ -9,6 +9,8 @@ Visual C++ 2010 可轉散發套件
 
 更新紀錄
 ===========
+ - 2016.04.30 Version 0.1.3.7 beta
+   - 配合Twitch的標籤更新，解決ID變成色碼的問題
  - 2016.03.30 Version 0.1.3.6 beta
    - 移除對Justin.tv的支援，Port移除443
    - 從tags取得使用者ID顏色
