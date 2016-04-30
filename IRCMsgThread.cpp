@@ -96,21 +96,35 @@ std::wstring IRCMsgThread::getUsername(std::wstring sender,std::wstring backup){
         return sender.substr(0,sender.find(L"!"));
     } else return sender;*/
 	//New Style: ex: color=#1E90FF;display-name=pikads;emotes=;mod=1;room-id=24805060;subscriber=0;turbo=0;user-id=25141849;user-type=mod
+	//@badges=;color=#F6BFB5;display-name=F6BFB5;emotes=;mod=0;room-id=47281189;subscriber=1;turbo=0;user-id=23745737;user-type= :f6bfb5!f6bfb5@f6bfb5.tmi.twitch.tv PRIVMSG #tetristhegrandmaster3 :我以榮耀作戰
 
 	//if the number of tokens is wrong, return Old Style username
 	std::vector<std::wstring> tag_parse = split(sender,L';',9);
 	if(tag_parse.size()<9) return getBackupUsername(backup);
-	std::vector<std::wstring> name_parse = split(tag_parse[1],L'=',2);
+	
 	std::wstring name;
-	if(name_parse.size()<2) name = getBackupUsername(backup);	
-	else {	//New style username	
-	name=name_parse[1]; //return name when displayname has something
+	for(int i=0;i<tag_parse.size();i++) {
+		//std::vector<std::wstring> name_parse = split(tag_parse[1],L'=',2);	
+		//if(name_parse.size()<2) name = getBackupUsername(backup);	
+
+		std::vector<std::wstring> name_parse = split(tag_parse[i],L'=',2);	
+		if(name_parse[0].compare(L"display-name")==0) {
+			if(name_parse.size()<2) name = getBackupUsername(backup); //old-style	
+			else {	//New style username	
+				name=name_parse[1]; //return name when displayname has something
+			}
+		}
+		if(name_parse[0].compare(L"color")==0) {
+			//set color when color has something
+			//color: SetUserColor(std::wstring User,std::wstring Color), need lowercase
+			//std::vector<std::wstring> color_parse = split(tag_parse[0],L'=',2);		
+			//if(color_parse.size()==2) SetUserColor(ToLowerString(lower_name),ToLowerString(color_parse[1])); 
+			if(name_parse.size()==2) {
+				std::wstring lower_name=getBackupUsername(backup);
+				SetUserColor(ToLowerString(lower_name),ToLowerString(name_parse[1]));
+			}; 
+		}
 	}
-	//set color when color has something
-	//color: SetUserColor(std::wstring User,std::wstring Color), need lowercase
-	std::vector<std::wstring> color_parse = split(tag_parse[0],L'=',2);
-	std::wstring lower_name=name;
-	if(color_parse.size()==2) SetUserColor(ToLowerString(lower_name),ToLowerString(color_parse[1])); 
 	
 	return name;
 }
